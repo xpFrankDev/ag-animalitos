@@ -20,7 +20,7 @@ export function App() {
 
   return <main>
     <header className="barra-superior">
-      <div className="marca"><span>AG</span><small>animalitos</small></div>
+      <div className="marca-con-menu"><div className="marca"><span>AG</span><small>animalitos</small></div>{sesion && <nav className="menu-principal" aria-label="Navegación principal"><button>Resumen de ventas</button><button>Ver resultados</button><button>Listado de tickets</button></nav>}</div>
       <div className="preferencias">
         <label>{t('idioma')}<select value={i18n.language} onChange={(evento) => cambiarIdioma(evento.target.value)}><option value="es">ES</option><option value="it">IT</option></select></label>
         <label>{t('tema')}<button className="boton-secundario" onClick={() => establecerTema(tema === 'claro' ? 'oscuro' : 'claro')}>{tema === 'claro' ? '☀️' : '🌙'}</button></label>
