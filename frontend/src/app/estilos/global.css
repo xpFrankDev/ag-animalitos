@@ -67,6 +67,34 @@
 
 @media (max-width: 1100px) { .rejilla-ventas { gap: 14px; } }
 @media (max-width: 680px) { .ventas { padding: 16px; } .rejilla-ventas { gap: 12px; } }
+
+/* Densidad operativa: más espacio para sorteos, menos ruido visual. */
+.rejilla-ventas { grid-template-columns: minmax(160px, 20%) minmax(320px, 1.35fr) minmax(255px, .93fr); }
+.panel-animales .rejilla-animales { grid-template-columns: repeat(auto-fit, 54px); justify-content: center; align-content: start; }
+.panel-animales .titulo-panel { justify-content: center; }
+.panel-animales .titulo-panel span { position: static; margin-left: 0; }
+.filtros-sorteos { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.filtros-sorteos button { min-height: 32px; border: 1px solid #c5d6ca; border-radius: 999px; padding: 5px 10px; background: #fff; color: #365346; font-size: 12px; font-weight: 700; }
+.filtros-sorteos button:hover, .filtros-sorteos button:focus-visible { border-color: #0a7450; background: #edf7ef; outline: 0; }
+.filtros-sorteos button.activo { border-color: #0a7450; background: #0a7450; color: #fff; }
+.opcion-sorteo { min-height: 42px; gap: 8px; padding: 7px 9px; }
+.opcion-sorteo span { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.opcion-sorteo b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opcion-sorteo small { white-space: nowrap; }
+.panel-ticket .total-superior { align-self: flex-end; width: 93%; padding: 9px 10px; font-size: 16px; }
+.acciones-ticket { justify-content: flex-start; gap: 8px; }
+:root[data-tema="oscuro"] .filtros-sorteos button { border-color: #477257; background: #1c3829; color: #e1f1e4; }
+:root[data-tema="oscuro"] .filtros-sorteos button.activo { border-color: #45b980; background: #0a7450; color: #fff; }
+
+@media (max-width: 1100px) {
+  .rejilla-ventas { grid-template-columns: minmax(135px, .56fr) minmax(265px, 1.2fr) minmax(225px, .88fr); }
+  .panel-animales .rejilla-animales { grid-template-columns: repeat(auto-fit, 48px); }
+  .panel-animales .titulo-panel span { position: static; margin-left: 0; }
+}
+@media (max-width: 680px) {
+  .rejilla-ventas { grid-template-columns: 125px minmax(235px, 1.25fr) minmax(200px, .9fr); min-width: 590px; }
+  .panel-animales .rejilla-animales { grid-template-columns: repeat(2, 48px); }
+}
 @media (max-width: 680px) {
   .barra-superior { align-items: flex-start; gap: 8px; }
   .marca-con-menu { align-items: flex-start; gap: 10px; }
