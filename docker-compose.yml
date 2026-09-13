@@ -10,8 +10,6 @@ services:
       MARIADB_PASSWORD: ${MARIADB_PASSWORD}
       MARIADB_MIGRACIONES_USUARIO: ${MARIADB_MIGRACIONES_USUARIO}
       MARIADB_MIGRACIONES_CONTRASENA: ${MARIADB_MIGRACIONES_CONTRASENA}
-    ports:
-      - "127.0.0.1:3306:3306"
     volumes:
       - ag_mariadb_datos:/var/lib/mysql
       - ./infraestructura/mariadb/inicializar-migraciones.sh:/docker-entrypoint-initdb.d/10-inicializar-migraciones.sh:ro

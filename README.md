@@ -24,7 +24,7 @@ Primera versión del sistema de venta de animalitos. El alcance actual es el ini
 2. Instala y abre Docker Desktop.
 3. Desde esta carpeta ejecuta `docker compose up --build -d`.
 
-Compose construye el frontend, la API y MariaDB. Espera a que MariaDB esté disponible, aplica las migraciones, carga la semilla idempotente y finalmente inicia la API. La aplicación queda en `http://localhost:8080` y Swagger en `http://localhost:8080/api/documentacion`.
+Compose construye el frontend, la API y MariaDB. Espera a que MariaDB esté disponible, aplica las migraciones, carga la semilla idempotente y finalmente inicia la API. MariaDB no expone un puerto al host: solo los servicios internos de Docker pueden acceder a ella. La aplicación queda en `http://localhost:8080` y Swagger en `http://localhost:8080/api/documentacion`.
 
 Para ver el inicio y los posibles errores: `docker compose logs -f`. Para detenerlo: `docker compose down`. Los datos de MariaDB quedan en el volumen `ag_mariadb_datos`; `docker compose down -v` los elimina deliberadamente.
 
