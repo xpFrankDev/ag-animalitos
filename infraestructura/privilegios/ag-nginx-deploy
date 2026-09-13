@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+set -eu
+
+origen=/home/deploy/ag/infraestructura/nginx/ag.conf
+sitio=/etc/nginx/sites-available/ag
+candidato=/etc/nginx/sites-available/ag.candidato
+enlace=/etc/nginx/sites-enabled/ag
+
+test -f "$origen"
+install -o root -g root -m 644 "$origen" "$candidato"
+ln -sfn ../sites-available/ag.candidato "$enlace"
+
+if ! nginx -t; then
+  rm -f "$candidato"
+  if test -f "$sitio"; then
+    ln -sfn ../sites-available/ag "$enlace"
+  else
+    rm -f "$enlace"
+  fi
+  exit 1
+fi
+
+mv -f "$candidato" "$sitio"
+ln -sfn ../sites-available/ag "$enlace"
+systemctl reload nginx

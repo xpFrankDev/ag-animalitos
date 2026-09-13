@@ -33,8 +33,8 @@ Para ver el inicio y los posibles errores: `docker compose logs -f`. Para detene
 El VPS usa Nginx del sistema para los puertos públicos `80/443`. Conserva en `.env` `APP_HOST_IP=127.0.0.1` y `APP_PORT=8080`; así Docker no expone la aplicación directamente a Internet. Configura `CORS_ORIGEN` con el dominio HTTPS público y usa secretos únicos.
 
 1. Clona el repositorio en `/home/deploy/ag`, crea allí el archivo `.env` desde `.env.example` y ajusta sus valores.
-2. Copia `infraestructura/nginx/ag.conf.example` como `/etc/nginx/sites-available/ag`, reemplaza `ag.example.com`, crea el enlace hacia `sites-enabled` y valida con `sudo nginx -t`.
-3. Ejecuta `sudo systemctl reload nginx` y luego `docker compose up --build -d` desde `/home/deploy/ag`.
+2. El sitio preparado para el host `vps-5586828-x.dattaweb.com` está en `infraestructura/nginx/ag.conf`. Instala una sola vez el wrapper restringido `infraestructura/privilegios/ag-nginx-deploy` como `/usr/local/sbin/ag-nginx-deploy` y autoriza únicamente ese comando a `deploy`; así no requiere sudo general para actualizar el sitio.
+3. Ejecuta `sudo /usr/local/sbin/ag-nginx-deploy` y luego `docker compose up --build -d` desde `/home/deploy/ag`.
 4. Cuando el DNS apunte al VPS, emite TLS con `sudo certbot --nginx -d tu-dominio`.
 
 Para actualizaciones posteriores, desde `/home/deploy/ag` ejecuta `./infraestructura/despliegue/actualizar.sh`; el script obtiene `develop` y reconstruye los contenedores. La semilla y las migraciones son idempotentes.
