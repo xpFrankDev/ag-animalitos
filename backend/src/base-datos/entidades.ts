@@ -106,7 +106,7 @@ export class Agencia {
   @JoinColumn({ name: 'fk_grupero' })
   grupero!: Grupero | null;
 
-  @Column({ type: 'char', length: 36, nullable: true })
+  @Column({ type: 'varchar', length: 36, nullable: true })
   fk_grupero!: string | null;
 
   @Column({ default: true })
@@ -118,7 +118,7 @@ export class Agencia {
   @UpdateDateColumn({ type: 'datetime' })
   modificado_at!: Date;
 
-  @Column({ type: 'char', length: 36, nullable: true })
+  @Column({ type: 'varchar', length: 36, nullable: true })
   fk_usuario_modificado!: string | null;
 }
 
@@ -154,7 +154,7 @@ export class Grupero {
   @UpdateDateColumn({ type: 'datetime' })
   modificado_at!: Date;
 
-  @Column({ type: 'char', length: 36, nullable: true })
+  @Column({ type: 'varchar', length: 36, nullable: true })
   fk_usuario_modificado!: string | null;
 }
 
