@@ -51,6 +51,22 @@
   .panel-animales .rejilla-animales { grid-template-columns: repeat(auto-fill, minmax(43px, 1fr)); }
   .animal { min-height: 60px; }
 }
+
+/* Ajuste de jerarquía y ritmo visual del puesto de venta. */
+.ventas { padding: 20px clamp(20px, 3vw, 42px); }
+.encabezado-ventas { min-height: 36px; margin-bottom: 18px; }
+.nombre-agencia { margin: 0; font-size: 13px; }
+.rejilla-ventas { gap: 18px; }
+.panel-operacion > .boton-primario { margin-top: 16px; }
+.panel-ticket .total-superior { margin-top: auto; margin-bottom: 12px; text-align: left; }
+.panel-ticket .total-superior span, .panel-ticket .total-superior strong { text-align: left; }
+.panel-ticket .vacio { align-self: stretch; display: grid; place-items: center; min-height: 100%; margin: 0; padding: 28px 18px; color: #587166; font-size: clamp(17px, 1.7vw, 22px); font-weight: 700; line-height: 1.35; text-align: center; }
+.acciones-ticket { justify-content: flex-start; }
+.acciones-ticket > span { flex-basis: 100%; margin-right: 0; }
+.panel-operacion > .boton-secundario { margin-top: 16px; }
+
+@media (max-width: 1100px) { .rejilla-ventas { gap: 14px; } }
+@media (max-width: 680px) { .ventas { padding: 16px; } .rejilla-ventas { gap: 12px; } }
 @media (max-width: 680px) {
   .barra-superior { align-items: flex-start; gap: 8px; }
   .marca-con-menu { align-items: flex-start; gap: 10px; }
