@@ -1,0 +1,62 @@
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { llamarApi } from '../../compartido/api/cliente';
+
+type Animal = { pk_animal: number; codigo_animal: string; nombre: string; icono: string };
+type Horario = { pk_horario_sorteo: number; hora: string; sorteo: string; disponible: boolean };
+type Inicio = { agencia: { nombre_agencia: string; codigo_agencia: string; cupo_animal: number; jugada_minima: number; minutos_cierre: number; comision_porcentaje: number }; animales: Animal[]; horarios: Horario[]; multiplicador_premio: number };
+type Jugada = { fk_animal: number; fk_horario_sorteo: number; monto: number };
+type Ticket = { serial: string; numero_ticket: number; total_jugado: number };
+
+export function AgenciaVentasRuta({ token, usuario }: { token: string; usuario: string }) {
+  const { t } = useTranslation();
+  const [inicio, establecerInicio] = useState<Inicio | null>(null);
+  const [animalesSeleccionados, establecerAnimales] = useState<number[]>([]);
+  const [horariosSeleccionados, establecerHorarios] = useState<number[]>([]);
+  const [monto, establecerMonto] = useState('1');
+  const [jugadas, establecerJugadas] = useState<Jugada[]>([]);
+  const [mensaje, establecerMensaje] = useState('');
+  const [cargando, establecerCargando] = useState(true);
+  const [emitiendo, establecerEmitiendo] = useState(false);
+  const [ultimoTicket, establecerUltimoTicket] = useState<Ticket | null>(null);
+
+  useEffect(() => { void llamarApi<Inicio>('/agencia/inicio', {}, token).then(establecerInicio).catch((error: Error) => establecerMensaje(error.message)).finally(() => establecerCargando(false)); }, [token]);
+  const animalesPorId = useMemo(() => new Map(inicio?.animales.map((animal) => [animal.pk_animal, animal]) ?? []), [inicio]);
+  const horariosPorId = useMemo(() => new Map(inicio?.horarios.map((horario) => [horario.pk_horario_sorteo, horario]) ?? []), [inicio]);
+  const total = jugadas.reduce((acumulado, jugada) => acumulado + jugada.monto, 0);
+
+  const alternar = (valor: number, valores: number[], establecer: (valores: number[]) => void) => establecer(valores.includes(valor) ? valores.filter((item) => item !== valor) : [...valores, valor]);
+  function agregarJugada() {
+    const montoNumerico = Number(monto.replace(',', '.'));
+    if (!Number.isFinite(montoNumerico) || montoNumerico <= 0 || !inicio || !animalesSeleccionados.length || !horariosSeleccionados.length) { establecerMensaje(t('selecciona')); return; }
+    if (montoNumerico < inicio.agencia.jugada_minima) { establecerMensaje(`Monto mínimo: ${inicio.agencia.jugada_minima.toFixed(2)}`); return; }
+    const nuevas = animalesSeleccionados.flatMap((fk_animal) => horariosSeleccionados.map((fk_horario_sorteo) => ({ fk_animal, fk_horario_sorteo, monto: montoNumerico })));
+    const existentes = new Set(jugadas.map((jugada) => `${jugada.fk_animal}-${jugada.fk_horario_sorteo}`));
+    const repetida = nuevas.some((jugada) => existentes.has(`${jugada.fk_animal}-${jugada.fk_horario_sorteo}`));
+    if (repetida) { establecerMensaje('La misma combinación ya está agregada.'); return; }
+    establecerJugadas([...jugadas, ...nuevas]); establecerAnimales([]); establecerHorarios([]); establecerMensaje('');
+  }
+  function manejarTecla(evento: KeyboardEvent<HTMLInputElement>) { if (evento.key === 'Enter') { evento.preventDefault(); agregarJugada(); } }
+  async function emitir(evento: FormEvent) {
+    evento.preventDefault(); if (!jugadas.length) return;
+    establecerEmitiendo(true); establecerMensaje('');
+    try { const ticket = await llamarApi<Ticket>('/agencia/tickets', { method: 'POST', body: JSON.stringify({ jugadas }) }, token); establecerUltimoTicket(ticket); establecerJugadas([]); establecerMensaje(t('venta_exitosa')); }
+    catch (error) { establecerMensaje(error instanceof Error ? error.message : 'Error al emitir el ticket.'); } finally { establecerEmitiendo(false); }
+  }
+
+  if (cargando) return <p className="estado-pagina">Cargando Agencia…</p>;
+  if (!inicio) return <p className="estado-pagina mensaje-error">{mensaje || 'No fue posible cargar la Agencia.'}</p>;
+  return <section className="ventas">
+    <div className="encabezado-ventas"><div><p className="etiqueta">{inicio.agencia.codigo_agencia}</p><h1>{inicio.agencia.nombre_agencia}</h1><p>{usuario} · {t('cupo')}: <strong>{inicio.agencia.cupo_animal.toFixed(2)}</strong> · Comisión: {inicio.agencia.comision_porcentaje}%</p></div><div className="regla-premio">Premio <strong>×{inicio.multiplicador_premio}</strong></div></div>
+    <form className="rejilla-ventas" onSubmit={emitir}>
+      <section className="tarjeta panel-animales"><div className="titulo-panel"><h2>1. {t('animales')}</h2><span>{animalesSeleccionados.length} seleccionados</span></div><div className="rejilla-animales">{inicio.animales.map((animal) => <button type="button" key={animal.pk_animal} aria-pressed={animalesSeleccionados.includes(animal.pk_animal)} className={`animal ${animalesSeleccionados.includes(animal.pk_animal) ? 'seleccionado' : ''}`} onClick={() => alternar(animal.pk_animal, animalesSeleccionados, establecerAnimales)}><b>{animal.codigo_animal}</b><span>{animal.icono}</span><small>{animal.nombre}</small></button>)}</div></section>
+      <section className="tarjeta panel-sorteos"><div className="titulo-panel"><h2>2. {t('sorteos')}</h2><span>Cierre: {inicio.agencia.minutos_cierre} min antes</span></div><div className="lista-sorteos">{inicio.horarios.map((horario) => <label className={`opcion-sorteo ${horariosSeleccionados.includes(horario.pk_horario_sorteo) ? 'seleccionado' : ''} ${!horario.disponible ? 'cerrado' : ''}`} key={horario.pk_horario_sorteo}><input type="checkbox" disabled={!horario.disponible} checked={horariosSeleccionados.includes(horario.pk_horario_sorteo)} onChange={() => alternar(horario.pk_horario_sorteo, horariosSeleccionados, establecerHorarios)} /><span><b>{horario.sorteo}</b><small>{horario.hora}{!horario.disponible ? ' · cerrado' : ''}</small></span></label>)}</div></section>
+      <aside className="tarjeta panel-ticket"><h2>3. {t('jugadas')}</h2><label>{t('monto')}<div className="campo-monto"><span>$</span><input inputMode="decimal" value={monto} onKeyDown={manejarTecla} onChange={(evento) => establecerMonto(evento.target.value)} /></div></label><button type="button" className="boton-secundario ancho-completo" onClick={agregarJugada}>{t('agregar')} ↵</button>
+        <div className="lista-jugadas">{jugadas.length === 0 ? <p className="vacio">{t('no_hay_jugadas')}</p> : jugadas.map((jugada, indice) => <div className="fila-jugada" key={`${jugada.fk_animal}-${jugada.fk_horario_sorteo}`}><span>{animalesPorId.get(jugada.fk_animal)?.icono} <b>{animalesPorId.get(jugada.fk_animal)?.codigo_animal}</b> · {horariosPorId.get(jugada.fk_horario_sorteo)?.sorteo} {horariosPorId.get(jugada.fk_horario_sorteo)?.hora}</span><strong>${jugada.monto.toFixed(2)}</strong><button type="button" aria-label="Eliminar jugada" onClick={() => establecerJugadas(jugadas.filter((_, posicion) => posicion !== indice))}>×</button></div>)}</div>
+        <div className="total"><span>{t('total')}</span><strong>${total.toFixed(2)}</strong></div><button className="boton-primario ancho-completo" disabled={!jugadas.length || emitiendo}>{emitiendo ? '…' : t('emitir')}</button>
+      </aside>
+    </form>
+    {mensaje && <div className="notificacion" role="status">{mensaje}</div>}
+    {ultimoTicket && <section className="recibo"><span>✓</span><div><strong>{t('ticket')} #{ultimoTicket.numero_ticket}</strong><p>Serial: {ultimoTicket.serial} · ${Number(ultimoTicket.total_jugado).toFixed(2)}</p></div></section>}
+  </section>;
+}

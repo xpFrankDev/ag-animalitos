@@ -1,0 +1,65 @@
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: ag-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+      MARIADB_MIGRACIONES_USUARIO: ${MARIADB_MIGRACIONES_USUARIO}
+      MARIADB_MIGRACIONES_CONTRASENA: ${MARIADB_MIGRACIONES_CONTRASENA}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - ag_mariadb_datos:/var/lib/mysql
+      - ./infraestructura/mariadb/inicializar-migraciones.sh:/docker-entrypoint-initdb.d/10-inicializar-migraciones.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -uroot -p$$MARIADB_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  inicializacion:
+    build:
+      context: ./backend
+      target: runner
+    env_file: .env
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      TIPO_CONEXION: migraciones
+    command: sh -c "npm run migracion:ejecutar && npm run sembrar"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      target: production
+    env_file: .env
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: 3306
+    depends_on:
+      inicializacion:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    expose:
+      - "3000"
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "${APP_HOST_IP:-127.0.0.1}:${APP_PORT:-8080}:80"
+    restart: unless-stopped
+
+volumes:
+  ag_mariadb_datos:
