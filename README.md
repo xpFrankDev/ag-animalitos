@@ -28,7 +28,16 @@ Compose construye el frontend, la API y MariaDB. Espera a que MariaDB esté disp
 
 Para ver el inicio y los posibles errores: `docker compose logs -f`. Para detenerlo: `docker compose down`. Los datos de MariaDB quedan en el volumen `ag_mariadb_datos`; `docker compose down -v` los elimina deliberadamente.
 
-En un VPS, establece `APP_HOST_IP=0.0.0.0`, `APP_PORT=80` (o el puerto elegido), `CORS_ORIGEN` con el dominio HTTPS público y secretos únicos. Después ejecuta el mismo `docker compose up --build -d`.
+## Despliegue en VPS
+
+El VPS usa Nginx del sistema para los puertos públicos `80/443`. Conserva en `.env` `APP_HOST_IP=127.0.0.1` y `APP_PORT=8080`; así Docker no expone la aplicación directamente a Internet. Configura `CORS_ORIGEN` con el dominio HTTPS público y usa secretos únicos.
+
+1. Clona el repositorio en `/home/deploy/ag`, crea allí el archivo `.env` desde `.env.example` y ajusta sus valores.
+2. Copia `infraestructura/nginx/ag.conf.example` como `/etc/nginx/sites-available/ag`, reemplaza `ag.example.com`, crea el enlace hacia `sites-enabled` y valida con `sudo nginx -t`.
+3. Ejecuta `sudo systemctl reload nginx` y luego `docker compose up --build -d` desde `/home/deploy/ag`.
+4. Cuando el DNS apunte al VPS, emite TLS con `sudo certbot --nginx -d tu-dominio`.
+
+Para actualizaciones posteriores, desde `/home/deploy/ag` ejecuta `./infraestructura/despliegue/actualizar.sh`; el script obtiene `develop` y reconstruye los contenedores. La semilla y las migraciones son idempotentes.
 
 ## Credenciales de demostración
 
