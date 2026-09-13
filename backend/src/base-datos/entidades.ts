@@ -102,10 +102,6 @@ export class Agencia {
   @JoinColumn({ name: 'fk_banquero' })
   banquero!: Usuario;
 
-  @ManyToOne(() => Grupero, { nullable: true })
-  @JoinColumn({ name: 'fk_grupero' })
-  grupero!: Grupero | null;
-
   @Column({ type: 'varchar', length: 36, nullable: true })
   fk_grupero!: string | null;
 
