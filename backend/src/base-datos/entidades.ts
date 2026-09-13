@@ -82,7 +82,7 @@ export class Agencia {
   @Column({ type: 'smallint', default: 5 })
   minutos_cierre!: number;
 
-  @Column({ length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   serial_pc!: string | null;
 
   @Column({ default: 1 })
