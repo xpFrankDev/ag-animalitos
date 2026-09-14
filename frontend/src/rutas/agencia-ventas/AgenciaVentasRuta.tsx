@@ -37,6 +37,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
   const [monto, establecerMonto] = useState('1');
   const [codigoAnimalManual, establecerCodigoAnimalManual] = useState('');
   const [jugadas, establecerJugadas] = useState<Jugada[]>([]);
+  const [jugadasUltimoTicket, establecerJugadasUltimoTicket] = useState<Jugada[]>([]);
   const [mensaje, establecerMensaje] = useState('');
   const [cargando, establecerCargando] = useState(true);
   const [emitiendo, establecerEmitiendo] = useState(false);
@@ -78,6 +79,8 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
   const tiposSorteo = useMemo(() => [...new Set(horariosDisponibles.map((horario) => horario.sorteo))], [horariosDisponibles]);
   const horariosVisibles = filtroSorteo === 'todos' ? horariosDisponibles : horariosDisponibles.filter((horario) => horario.sorteo === filtroSorteo);
   const total = jugadas.reduce((acumulado, jugada) => acumulado + jugada.monto, 0);
+  const jugadasParaImprimir = jugadas.length ? jugadas : jugadasUltimoTicket;
+  const totalImprimible = jugadas.length ? total : Number(ultimoTicket?.total_jugado ?? total);
 
   useEffect(() => {
     if (!mensaje) return undefined;
@@ -137,13 +140,13 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
   function manejarTeclaAnimal(evento: KeyboardEvent<HTMLInputElement>) { if (evento.key === 'Enter') { evento.preventDefault(); seleccionarAnimalManual(); } }
   function informarAccionTicket(accion: string) { establecerMensaje(t('accion_requiere_ticket', { accion })); }
   function imprimirTicket() {
-    if (!jugadas.length && !ultimoTicket) { establecerMensaje(t('agrega_jugada_antes_imprimir')); return; }
+    if (!jugadasParaImprimir.length && !ultimoTicket) { establecerMensaje(t('agrega_jugada_antes_imprimir')); return; }
     window.print();
   }
   async function emitir(evento: FormEvent) {
     evento.preventDefault(); if (!jugadas.length) { establecerMensaje(t('agrega_jugada_antes_emitir')); return; }
     establecerEmitiendo(true); establecerMensaje('');
-    try { const ticket = await llamarApi<Ticket>('/agencia/tickets', { method: 'POST', body: JSON.stringify({ jugadas }) }, token); establecerUltimoTicket(ticket); establecerJugadas([]); establecerMensaje(t('venta_exitosa')); }
+    try { const ticket = await llamarApi<Ticket>('/agencia/tickets', { method: 'POST', body: JSON.stringify({ jugadas }) }, token); establecerUltimoTicket(ticket); establecerJugadasUltimoTicket(jugadas); establecerJugadas([]); establecerMensaje(t('venta_exitosa')); }
     catch (error) { gestionarError(error); } finally { establecerEmitiendo(false); }
   }
 
@@ -163,7 +166,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
       <button type="button" onClick={() => informarAccionTicket('Anular ticket')}>Anular ticket</button>
       <button type="button" onClick={() => informarAccionTicket('Pagar ticket')}>Pagar ticket</button>
     </section>
-    <section className="ticket-pos" aria-hidden="true"><strong>AG · ANIMALITOS</strong><span>{inicio.agencia.nombre_agencia}</span><span>{new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', dateStyle: 'short', timeStyle: 'short' }).format(new Date())}</span><hr/>{ultimoTicket && <span>TN: {ultimoTicket.numero_ticket} · SN: {ultimoTicket.serial}</span>}{[...new Map(jugadas.map((jugada) => [jugada.fk_horario_sorteo, jugada])).values()].map((jugada) => { const horario = horariosPorId.get(jugada.fk_horario_sorteo); const items = jugadas.filter((item) => item.fk_horario_sorteo === jugada.fk_horario_sorteo); return <div key={jugada.fk_horario_sorteo}><b>{horario?.sorteo} {horario?.hora}</b><span>{items.map((item) => animalesPorId.get(item.fk_animal)?.nombre.slice(0, 4)).join(' - ')}</span><span>x{items[0].monto.toFixed(2)}</span></div>; })}<hr/><strong>Total: ${total.toFixed(2)}</strong></section>
+    <section className="ticket-pos" aria-hidden="true"><strong>AG · ANIMALITOS</strong><span>{inicio.agencia.nombre_agencia}</span><span>{new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', dateStyle: 'short', timeStyle: 'short' }).format(new Date())}</span><hr/>{ultimoTicket && <span>TN: {ultimoTicket.numero_ticket} · SN: {ultimoTicket.serial}</span>}{[...new Map(jugadasParaImprimir.map((jugada) => [jugada.fk_horario_sorteo, jugada])).values()].map((jugada) => { const horario = horariosPorId.get(jugada.fk_horario_sorteo); const items = jugadasParaImprimir.filter((item) => item.fk_horario_sorteo === jugada.fk_horario_sorteo); return <div key={jugada.fk_horario_sorteo}><b>{horario?.sorteo} {horario?.hora}</b><span>{items.map((item) => animalesPorId.get(item.fk_animal)?.nombre.slice(0, 4)).join(' - ')}</span><span>x{items[0].monto.toFixed(2)}</span></div>; })}<hr/><strong>Total: ${totalImprimible.toFixed(2)}</strong></section>
     {mensaje && <div className="notificacion emergente" role="status">{mensaje}</div>}
     {ultimoTicket && <section className="recibo"><span>✓</span><div><strong>{t('ticket')} #{ultimoTicket.numero_ticket}</strong><p>Serial: {ultimoTicket.serial} · ${Number(ultimoTicket.total_jugado).toFixed(2)}</p></div></section>}
   </section>;
