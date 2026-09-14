@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { entidades } from './entidades';
 import { CrearEsquemaInicial1710000000000 } from './migraciones/1710000000000-CrearEsquemaInicial';
 import { NormalizarCodigosAnimales1710000001000 } from './migraciones/1710000001000-NormalizarCodigosAnimales';
+import { CorregirAnimalesDuplicados1710000002000 } from './migraciones/1710000002000-CorregirAnimalesDuplicados';
 
 const esMigracion = process.env.TIPO_CONEXION === 'migraciones';
 
@@ -14,7 +15,7 @@ export const origenDatos = new DataSource({
   password: esMigracion ? process.env.DB_MIGRACIONES_CONTRASENA : process.env.DB_APLICACION_CONTRASENA,
   database: process.env.DB_NOMBRE,
   entities: entidades,
-  migrations: [CrearEsquemaInicial1710000000000, NormalizarCodigosAnimales1710000001000],
+  migrations: [CrearEsquemaInicial1710000000000, NormalizarCodigosAnimales1710000001000, CorregirAnimalesDuplicados1710000002000],
   synchronize: false,
   logging: false,
 });

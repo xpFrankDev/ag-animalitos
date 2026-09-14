@@ -60,6 +60,36 @@
 .panel-ticket .total-superior, .panel-ticket > .boton-primario { box-sizing: border-box; align-self: stretch; width: 100%; }
 .panel-ticket .total-superior { color: var(--texto-total); }
 .total-superior strong { color: var(--texto-total); }
+.fila-jugada { grid-template-columns: minmax(0, 1fr) auto 30px; align-items: center; }
+.fila-jugada > .detalle-jugada { display: flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; }
+.detalle-jugada > span:first-child { flex: 0 0 auto; }
+.detalle-jugada > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; }
+.detalle-jugada small { overflow: hidden; color: var(--texto-suave); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+
+.fondo-consulta { position: fixed; z-index: 20; inset: 76px 0 0; display: grid; place-items: center; padding: clamp(var(--s4), 3vw, var(--s6)); background: rgb(8 35 24 / 38%); }
+.ventana-consulta { display: flex; width: min(100%, 1040px); max-height: min(760px, calc(100dvh - 124px)); min-height: 360px; flex-direction: column; padding: var(--s5); }
+.encabezado-consulta { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); margin-bottom: var(--s4); }
+.encabezado-consulta h1 { margin: 0; font-size: 22px; letter-spacing: -.025em; }
+.boton-cerrar { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--borde); border-radius: 8px; background: var(--superficie); color: var(--texto-suave); font-size: 22px; line-height: 1; }
+.boton-cerrar:hover { border-color: var(--peligro); color: var(--peligro); }
+.filtro-fecha, .filtros-rango label { display: grid; gap: 6px; color: var(--texto-suave); font-size: 12px; font-weight: 750; }
+.filtro-fecha { width: min(100%, 220px); margin-bottom: var(--s4); }
+.filtros-rango { display: flex; flex-wrap: wrap; gap: var(--s3); margin-bottom: var(--s4); }
+.filtro-fecha input, .filtro-fecha select, .filtros-rango input { min-height: 38px; border: 1px solid var(--borde); border-radius: 8px; padding: 0 10px; background: var(--superficie-suave); color: var(--texto); }
+.contenido-consulta { min-height: 0; flex: 1; overflow: auto; }
+.estado-consulta { display: grid; min-height: 180px; place-items: center; margin: 0; color: var(--texto-suave); text-align: center; }
+.tabla-consulta { display: grid; gap: 6px; }
+.fila-consulta { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; align-items: center; gap: var(--s3); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px; background: var(--superficie-suave); font-size: 13px; }
+.fila-consulta.ticket { grid-template-columns: minmax(0, 1fr) auto auto; }
+.fila-consulta small { display: block; margin-top: 2px; color: var(--texto-suave); font-size: 11px; }
+.estado-ticket { border-radius: 999px; padding: 4px 8px; background: var(--primario-suave); color: var(--primario-oscuro); font-size: 11px; font-weight: 800; }
+.estado-ticket.cancelado { background: color-mix(in srgb, var(--peligro) 14%, var(--superficie)); color: var(--peligro); }
+.estado-ticket.premiado { background: color-mix(in srgb, var(--acento) 24%, var(--superficie)); color: #765400; }
+.estado-ticket.pagado { background: color-mix(in srgb, var(--exito) 18%, var(--superficie)); color: var(--exito); }
+.metricas-resumen { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); margin-bottom: var(--s4); }
+.metricas-resumen > div { display: grid; gap: 5px; border: 1px solid var(--borde); border-radius: 10px; padding: var(--s3); background: var(--superficie-suave); }
+.metricas-resumen span { color: var(--texto-suave); font-size: 11px; font-weight: 750; }
+.metricas-resumen strong { font-size: 18px; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 760px) {
   .barra-superior { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--s3); }
@@ -73,6 +103,12 @@
   .menu-principal.abierto { display: grid; }
   .menu-principal button { justify-content: flex-start; padding-inline: var(--s3); }
   .lista-sorteos { max-height: 360px; }
+  .fondo-consulta { inset: 0; padding: var(--s3); }
+  .ventana-consulta { max-height: calc(100dvh - 24px); min-height: 0; padding: var(--s4); }
+  .fila-consulta, .fila-consulta.ticket { grid-template-columns: 1fr auto; }
+  .fila-consulta > :nth-child(2) { grid-column: 1; }
+  .metricas-resumen { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .detalle-jugada small { max-width: 105px; }
 }
 
 @media (max-width: 1120px) {

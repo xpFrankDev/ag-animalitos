@@ -1,8 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import { DataSource, In, Repository } from 'typeorm';
-import { EstadoJugada, EstadoTicket, Agencia, Animal, Grupero, HorarioSorteo, JugadaTicket, Ticket, TipoUsuario } from '../base-datos/entidades';
+import { Between, DataSource, In, Not, Repository } from 'typeorm';
+import { EstadoJugada, EstadoTicket, Agencia, Animal, Grupero, HorarioSorteo, JugadaTicket, Resultado, Ticket, TipoUsuario } from '../base-datos/entidades';
 import { CrearVentaDto, JugadaNuevaDto } from './dto/crear-venta.dto';
 
 type Sesion = { sub: string; tipo_usuario: TipoUsuario };
@@ -47,29 +47,26 @@ export class AgenciaService {
     try { this.validarCierre(horario, minutosCierre); return true; } catch { return false; }
   }
 
-  private validarJugadas(datos: CrearVentaDto, animales: Animal[], horarios: HorarioSorteo[], agencia: Agencia): void {
+  private validarJugadas(jugadas: JugadaNuevaDto[], animales: Animal[], horarios: HorarioSorteo[], agencia: Agencia): void {
     const animalesValidos = new Set(animales.map((animal) => animal.pk_animal));
     const horariosPorId = new Map(horarios.map((horario) => [horario.pk_horario_sorteo, horario]));
-    const combinaciones = new Set<string>();
-    for (const jugada of datos.jugadas) {
+    for (const jugada of jugadas) {
       if (!animalesValidos.has(jugada.fk_animal)) throw new BadRequestException('Uno de los animales ya no está disponible.');
       const horario = horariosPorId.get(jugada.fk_horario_sorteo);
       if (!horario) throw new BadRequestException('Uno de los sorteos ya no está disponible.');
       if (jugada.monto < Number(agencia.jugada_minima)) throw new BadRequestException(`La jugada mínima es ${agencia.jugada_minima}.`);
-      const clave = `${jugada.fk_animal}-${jugada.fk_horario_sorteo}`;
-      if (combinaciones.has(clave)) throw new BadRequestException('No repitas el mismo animal en el mismo sorteo dentro de un ticket.');
-      combinaciones.add(clave);
       this.validarCierre(horario, agencia.minutos_cierre);
     }
   }
 
   async crearVenta(sesion: Sesion, datos: CrearVentaDto) {
     const agencia = await this.obtenerAgencia(sesion);
+    const jugadas = this.acumularJugadas(datos.jugadas);
     const [animales, horarios] = await Promise.all([
-      this.repositorioAnimales.find({ where: { pk_animal: In(datos.jugadas.map((jugada) => jugada.fk_animal)), activo: true } }),
-      this.repositorioHorarios.find({ where: { pk_horario_sorteo: In(datos.jugadas.map((jugada) => jugada.fk_horario_sorteo)), activo: true }, relations: { sorteo: true } }),
+      this.repositorioAnimales.find({ where: { pk_animal: In(jugadas.map((jugada) => jugada.fk_animal)), activo: true } }),
+      this.repositorioHorarios.find({ where: { pk_horario_sorteo: In(jugadas.map((jugada) => jugada.fk_horario_sorteo)), activo: true }, relations: { sorteo: true } }),
     ]);
-    this.validarJugadas(datos, animales, horarios, agencia);
+    this.validarJugadas(jugadas, animales, horarios, agencia);
     const fechaJuego = new Date().toISOString().slice(0, 10);
 
     return this.origenDatos.transaction(async (gestor) => {
@@ -80,7 +77,7 @@ export class AgenciaService {
         : [agenciaBloqueada];
       const idsAgenciasGrupo = agenciasDelGrupo.map((item) => item.pk_agencia);
 
-      for (const jugada of datos.jugadas) {
+      for (const jugada of jugadas) {
         await this.validarCupo(gestor, jugada, fechaJuego, [agenciaBloqueada.pk_agencia], Number(agenciaBloqueada.cupo_animal), 'Agencia');
         if (agenciaBloqueada.fk_grupero) {
           const grupero = await gestor.getRepository(Grupero).createQueryBuilder('grupero').setLock('pessimistic_write').where('grupero.pk_grupero = :pk_grupero', { pk_grupero: agenciaBloqueada.fk_grupero }).getOneOrFail();
@@ -88,7 +85,7 @@ export class AgenciaService {
         }
       }
 
-      const totalJugado = datos.jugadas.reduce((total, jugada) => total + Math.round(jugada.monto * 100), 0) / 100;
+      const totalJugado = jugadas.reduce((total, jugada) => total + Math.round(jugada.monto * 100), 0) / 100;
       const ticket = gestor.getRepository(Ticket).create({
         pk_ticket: randomUUID(),
         serial: `AG-${randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`,
@@ -103,11 +100,21 @@ export class AgenciaService {
       });
       await gestor.save(ticket);
       await gestor.getRepository(Agencia).update(agenciaBloqueada.pk_agencia, { proximo_numero_ticket: agenciaBloqueada.proximo_numero_ticket + 1, fk_usuario_modificado: sesion.sub });
-      await gestor.save(datos.jugadas.map((jugada) => gestor.getRepository(JugadaTicket).create({
+      await gestor.save(jugadas.map((jugada) => gestor.getRepository(JugadaTicket).create({
         pk_jugada_ticket: randomUUID(), fk_ticket: ticket.pk_ticket, fk_animal: jugada.fk_animal, fk_horario_sorteo: jugada.fk_horario_sorteo, fecha_juego: fechaJuego, monto: jugada.monto.toFixed(2), estado: EstadoJugada.ACTIVA, fk_usuario_modificado: sesion.sub,
       })));
       return { serial: ticket.serial, numero_ticket: ticket.numero_ticket, total_jugado: totalJugado, creado_at: ticket.creado_at };
     });
+  }
+
+  private acumularJugadas(jugadas: JugadaNuevaDto[]): JugadaNuevaDto[] {
+    const acumuladas = new Map<string, JugadaNuevaDto>();
+    for (const jugada of jugadas) {
+      const clave = `${jugada.fk_animal}-${jugada.fk_horario_sorteo}`;
+      const anterior = acumuladas.get(clave);
+      acumuladas.set(clave, anterior ? { ...anterior, monto: Math.round((anterior.monto + jugada.monto) * 100) / 100 } : { ...jugada });
+    }
+    return [...acumuladas.values()];
   }
 
   private async validarCupo(gestor: DataSource['manager'], jugada: JugadaNuevaDto, fechaJuego: string, idsAgencias: string[], cupo: number, etiqueta: string): Promise<void> {
@@ -122,9 +129,41 @@ export class AgenciaService {
     if (vendido + jugada.monto > cupo + 0.00001) throw new BadRequestException(`Cupo de ${etiqueta} agotado para esta combinación. Disponible: ${Math.max(0, cupo - vendido).toFixed(2)}.`);
   }
 
-  async listarTickets(sesion: Sesion) {
+  async listarResultados(sesion: Sesion, fecha?: string) {
+    await this.obtenerAgencia(sesion);
+    const fechaConsulta = this.validarFecha(fecha);
+    return this.origenDatos.getRepository(Resultado).createQueryBuilder('resultado')
+      .innerJoin(HorarioSorteo, 'horario', 'horario.pk_horario_sorteo = resultado.fk_horario_sorteo')
+      .innerJoin('horario.sorteo', 'sorteo')
+      .innerJoin(Animal, 'animal', 'animal.pk_animal = resultado.fk_animal')
+      .select(['resultado.pk_resultado AS pk_resultado', 'horario.hora AS hora', 'sorteo.nombre AS sorteo', 'animal.codigo_animal AS codigo_animal', 'animal.nombre AS nombre_animal', 'animal.icono AS icono_animal'])
+      .where('resultado.fecha_juego = :fecha', { fecha: fechaConsulta })
+      .orderBy('horario.hora', 'ASC')
+      .getRawMany();
+  }
+
+  async listarTickets(sesion: Sesion, estado?: string) {
     const agencia = await this.obtenerAgencia(sesion);
-    return this.repositorioTickets.find({ where: { fk_agencia: agencia.pk_agencia }, relations: { jugadas: { animal: true, horario_sorteo: { sorteo: true } } }, order: { creado_at: 'DESC' }, take: 30 });
+    if (estado && !Object.values(EstadoTicket).includes(estado as EstadoTicket)) throw new BadRequestException('El estado de ticket no es válido.');
+    return this.repositorioTickets.find({ where: { fk_agencia: agencia.pk_agencia, ...(estado ? { estado: estado as EstadoTicket } : {}) }, relations: { jugadas: { animal: true, horario_sorteo: { sorteo: true } } }, order: { creado_at: 'DESC' }, take: 100 });
+  }
+
+  async resumenVentas(sesion: Sesion, desde?: string, hasta?: string) {
+    const agencia = await this.obtenerAgencia(sesion);
+    const fechaDesde = this.validarFecha(desde);
+    const fechaHasta = this.validarFecha(hasta ?? desde);
+    if (fechaDesde > fechaHasta) throw new BadRequestException('La fecha inicial no puede ser posterior a la final.');
+    const tickets = await this.repositorioTickets.find({ where: { fk_agencia: agencia.pk_agencia, fecha_juego: Between(fechaDesde, fechaHasta), estado: Not(EstadoTicket.CANCELADO) }, relations: { jugadas: { animal: true, horario_sorteo: { sorteo: true } } }, order: { creado_at: 'DESC' } });
+    const total_vendido = tickets.reduce((total, ticket) => total + Number(ticket.total_jugado), 0);
+    const total_premiado = tickets.reduce((total, ticket) => total + Number(ticket.total_premio), 0);
+    return { desde: fechaDesde, hasta: fechaHasta, total_vendido, total_premiado, porcentaje_premiado: total_vendido ? (total_premiado / total_vendido) * 100 : 0, resto: total_vendido - total_premiado, tickets };
+  }
+
+  private validarFecha(fecha?: string): string {
+    const fechaActual = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas' }).format(new Date());
+    const fechaConsulta = fecha ?? fechaActual;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaConsulta)) throw new BadRequestException('La fecha debe tener el formato AAAA-MM-DD.');
+    return fechaConsulta;
   }
 
   async cancelarTicket(sesion: Sesion, serial: string) {
