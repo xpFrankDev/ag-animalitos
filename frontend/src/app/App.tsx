@@ -29,6 +29,7 @@ export function App() {
 
   useEffect(() => { document.documentElement.dataset.tema = tema; localStorage.setItem(claveTema, tema); }, [tema]);
   useEffect(() => { const actualizarRuta = () => establecerRuta(rutaActual()); window.addEventListener('popstate', actualizarRuta); window.addEventListener('ruta-animalitos', actualizarRuta); return () => { window.removeEventListener('popstate', actualizarRuta); window.removeEventListener('ruta-animalitos', actualizarRuta); }; }, []);
+  useEffect(() => { if (window.location.pathname.replace(/\/$/, '') !== ruta) navegar(ruta, true); }, [ruta]);
   useEffect(() => { const destino = sesion ? rutaPorTipo(sesion.usuario.tipo_usuario) : '/animalitos/login'; if (ruta !== destino) navegar(destino, true); }, [sesion, ruta]);
   const cambiarIdioma = (idioma: string) => { void i18n.changeLanguage(idioma); localStorage.setItem('ag_idioma', idioma); };
   const salir = () => { localStorage.removeItem('ag_sesion'); establecerSesion(null); establecerMenuMovil(false); establecerConsulta(null); navegar('/animalitos/login', true); };
