@@ -130,14 +130,14 @@ export class AgenciaService {
   }
 
   async listarResultados(sesion: Sesion, fecha?: string) {
-    await this.obtenerAgencia(sesion);
+    const agencia = await this.obtenerAgencia(sesion);
     const fechaConsulta = this.validarFecha(fecha);
     const resultados = await this.origenDatos.getRepository(Resultado).createQueryBuilder('resultado')
       .innerJoin(HorarioSorteo, 'horario', 'horario.pk_horario_sorteo = resultado.fk_horario_sorteo')
       .innerJoin('horario.sorteo', 'sorteo')
       .innerJoin(Animal, 'animal', 'animal.pk_animal = resultado.fk_animal')
       .select(['resultado.pk_resultado AS pk_resultado', 'horario.hora AS hora', 'sorteo.nombre AS sorteo', 'animal.codigo_animal AS codigo_animal', 'animal.nombre AS nombre_animal', 'animal.icono AS icono_animal'])
-      .where('resultado.fecha_juego = :fecha', { fecha: fechaConsulta })
+      .where('resultado.fecha_juego = :fecha AND resultado.fk_banquero = :fk_banquero', { fecha: fechaConsulta, fk_banquero: agencia.fk_banquero })
       .orderBy('horario.hora', 'ASC')
       .getRawMany();
     if (resultados.length || fechaConsulta !== this.validarFecha()) return resultados;
