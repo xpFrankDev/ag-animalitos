@@ -132,7 +132,7 @@ export class AgenciaService {
   async listarResultados(sesion: Sesion, fecha?: string) {
     await this.obtenerAgencia(sesion);
     const fechaConsulta = this.validarFecha(fecha);
-    return this.origenDatos.getRepository(Resultado).createQueryBuilder('resultado')
+    const resultados = await this.origenDatos.getRepository(Resultado).createQueryBuilder('resultado')
       .innerJoin(HorarioSorteo, 'horario', 'horario.pk_horario_sorteo = resultado.fk_horario_sorteo')
       .innerJoin('horario.sorteo', 'sorteo')
       .innerJoin(Animal, 'animal', 'animal.pk_animal = resultado.fk_animal')
@@ -140,12 +140,21 @@ export class AgenciaService {
       .where('resultado.fecha_juego = :fecha', { fecha: fechaConsulta })
       .orderBy('horario.hora', 'ASC')
       .getRawMany();
+    if (resultados.length || fechaConsulta !== this.validarFecha()) return resultados;
+    return [
+      { pk_resultado: 'demostracion-1', hora: '12:00:00', sorteo: 'Lotto Activo', codigo_animal: '05', nombre_animal: 'León', icono_animal: '🦁', es_demostracion: true },
+      { pk_resultado: 'demostracion-2', hora: '14:00:00', sorteo: 'La Granjita', codigo_animal: '18', nombre_animal: 'Burro', icono_animal: '🐴', es_demostracion: true },
+      { pk_resultado: 'demostracion-3', hora: '16:30:00', sorteo: 'Lotto Internacional', codigo_animal: '29', nombre_animal: 'Elefante', icono_animal: '🐘', es_demostracion: true },
+    ];
   }
 
-  async listarTickets(sesion: Sesion, estado?: string) {
+  async listarTickets(sesion: Sesion, estado?: string, desde?: string, hasta?: string) {
     const agencia = await this.obtenerAgencia(sesion);
     if (estado && !Object.values(EstadoTicket).includes(estado as EstadoTicket)) throw new BadRequestException('El estado de ticket no es válido.');
-    return this.repositorioTickets.find({ where: { fk_agencia: agencia.pk_agencia, ...(estado ? { estado: estado as EstadoTicket } : {}) }, relations: { jugadas: { animal: true, horario_sorteo: { sorteo: true } } }, order: { creado_at: 'DESC' }, take: 100 });
+    const fechaDesde = this.validarFecha(desde);
+    const fechaHasta = this.validarFecha(hasta ?? desde);
+    if (fechaDesde > fechaHasta) throw new BadRequestException('La fecha inicial no puede ser posterior a la final.');
+    return this.repositorioTickets.find({ where: { fk_agencia: agencia.pk_agencia, fecha_juego: Between(fechaDesde, fechaHasta), ...(estado ? { estado: estado as EstadoTicket } : {}) }, relations: { jugadas: { animal: true, horario_sorteo: { sorteo: true } } }, order: { creado_at: 'DESC' }, take: 100 });
   }
 
   async resumenVentas(sesion: Sesion, desde?: string, hasta?: string) {

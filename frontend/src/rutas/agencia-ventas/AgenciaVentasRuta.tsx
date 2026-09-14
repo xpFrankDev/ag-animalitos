@@ -10,6 +10,18 @@ type Ticket = { serial: string; numero_ticket: number; total_jugado: number };
 
 function formatearCodigoAnimal(codigo: string) { return codigo === '0' ? codigo : codigo.padStart(2, '0'); }
 
+function minutosEnVenezuela(fecha: Date) {
+  const partes = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(fecha);
+  const hora = Number(partes.find((parte) => parte.type === 'hour')?.value ?? 0);
+  const minuto = Number(partes.find((parte) => parte.type === 'minute')?.value ?? 0);
+  return hora * 60 + minuto;
+}
+
+function sigueDisponible(horario: Horario, minutosCierre: number, minutosActuales: number) {
+  const [hora, minuto] = horario.hora.split(':').map(Number);
+  return horario.disponible && minutosActuales < (hora * 60) + minuto - minutosCierre;
+}
+
 export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; alVencerSesion: () => void }) {
   const { t } = useTranslation();
   const [inicio, establecerInicio] = useState<Inicio | null>(null);
@@ -24,6 +36,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
   const [ultimoTicket, establecerUltimoTicket] = useState<Ticket | null>(null);
   const [filtroSorteo, establecerFiltroSorteo] = useState('todos');
   const [horaVenezuela, establecerHoraVenezuela] = useState('');
+  const [marcaHoraVenezuela, establecerMarcaHoraVenezuela] = useState(() => Date.now());
   const referenciaMonto = useRef<HTMLInputElement>(null);
 
   function gestionarError(error: unknown) {
@@ -38,28 +51,48 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
     return () => window.clearTimeout(temporizador);
   }, [sesionVencida, alVencerSesion]);
   useEffect(() => {
-    const actualizarHora = () => establecerHoraVenezuela(new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit' }).format(new Date()));
+    const actualizarHora = () => {
+      const ahora = new Date();
+      establecerHoraVenezuela(new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit' }).format(ahora));
+      establecerMarcaHoraVenezuela(ahora.getTime());
+    };
     actualizarHora();
-    const intervalo = window.setInterval(actualizarHora, 30_000);
+    const intervalo = window.setInterval(actualizarHora, 10_000);
     return () => window.clearInterval(intervalo);
   }, []);
   const animalesPorId = useMemo(() => new Map(inicio?.animales.map((animal) => [animal.pk_animal, animal]) ?? []), [inicio]);
   const animalesOrdenados = useMemo(() => [...(inicio?.animales ?? [])].sort((primero, segundo) => Number.parseInt(primero.codigo_animal, 10) - Number.parseInt(segundo.codigo_animal, 10)), [inicio]);
   const horariosPorId = useMemo(() => new Map(inicio?.horarios.map((horario) => [horario.pk_horario_sorteo, horario]) ?? []), [inicio]);
-  const horariosDisponibles = useMemo(() => inicio?.horarios.filter((horario) => horario.disponible) ?? [], [inicio]);
+  const minutosActuales = useMemo(() => minutosEnVenezuela(new Date(marcaHoraVenezuela)), [marcaHoraVenezuela]);
+  const horariosDisponibles = useMemo(() => inicio?.horarios.filter((horario) => sigueDisponible(horario, inicio.agencia.minutos_cierre, minutosActuales)) ?? [], [inicio, minutosActuales]);
   const tiposSorteo = useMemo(() => [...new Set(horariosDisponibles.map((horario) => horario.sorteo))], [horariosDisponibles]);
   const horariosVisibles = filtroSorteo === 'todos' ? horariosDisponibles : horariosDisponibles.filter((horario) => horario.sorteo === filtroSorteo);
   const total = jugadas.reduce((acumulado, jugada) => acumulado + jugada.monto, 0);
+
+  useEffect(() => {
+    const idsDisponibles = new Set(horariosDisponibles.map((horario) => horario.pk_horario_sorteo));
+    establecerHorarios((actuales) => actuales.filter((id) => idsDisponibles.has(id)));
+    establecerJugadas((actuales) => actuales.filter((jugada) => idsDisponibles.has(jugada.fk_horario_sorteo)));
+  }, [horariosDisponibles]);
 
   const alternar = (valor: number, valores: number[], establecer: (valores: number[]) => void) => establecer(valores.includes(valor) ? valores.filter((item) => item !== valor) : [...valores, valor]);
   function alternarAnimal(pk_animal: number) {
     alternar(pk_animal, animalesSeleccionados, establecerAnimales);
     window.requestAnimationFrame(() => referenciaMonto.current?.focus());
   }
+  function alternarHorario(pkHorario: number) {
+    alternar(pkHorario, horariosSeleccionados, establecerHorarios);
+    window.requestAnimationFrame(() => referenciaMonto.current?.focus());
+  }
+  function limpiarJugadas() {
+    establecerAnimales([]); establecerHorarios([]); establecerJugadas([]); establecerMonto('1'); establecerMensaje('');
+    window.requestAnimationFrame(() => referenciaMonto.current?.focus());
+  }
   function agregarJugada() {
     const montoNumerico = Number(monto.replace(',', '.'));
-    if (!Number.isFinite(montoNumerico) || montoNumerico <= 0 || !inicio || !animalesSeleccionados.length || !horariosSeleccionados.length) { establecerMensaje(''); return; }
-    if (montoNumerico < inicio.agencia.jugada_minima) { establecerMensaje(`Monto mínimo: ${inicio.agencia.jugada_minima.toFixed(2)}`); return; }
+    if (!inicio || !animalesSeleccionados.length || !horariosSeleccionados.length) { establecerMensaje(''); return; }
+    const montoMinimo = Math.max(1, inicio.agencia.jugada_minima);
+    if (!Number.isFinite(montoNumerico) || montoNumerico < montoMinimo) { establecerMensaje(t('monto_minimo', { monto: montoMinimo.toFixed(2) })); return; }
     const nuevas = animalesSeleccionados.flatMap((fk_animal) => horariosSeleccionados.map((fk_horario_sorteo) => ({ fk_animal, fk_horario_sorteo, monto: montoNumerico })));
     establecerJugadas((actuales) => {
       const acumuladas = new Map(actuales.map((jugada) => [`${jugada.fk_animal}-${jugada.fk_horario_sorteo}`, jugada]));
@@ -86,10 +119,11 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
     <div className="encabezado-ventas"><p className="etiqueta nombre-agencia">{inicio.agencia.nombre_agencia} · {inicio.agencia.codigo_agencia}</p><time className="hora-venezuela">Hora Venezuela: {horaVenezuela}</time></div>
     <form className="rejilla-ventas" onSubmit={emitir}>
       <section className="tarjeta panel-animales"><div className="titulo-panel"><span>{animalesSeleccionados.length} seleccionados</span></div><div className="rejilla-animales">{animalesOrdenados.map((animal) => <button type="button" key={animal.pk_animal} aria-pressed={animalesSeleccionados.includes(animal.pk_animal)} className={`animal ${animalesSeleccionados.includes(animal.pk_animal) ? 'seleccionado' : ''}`} onClick={() => alternarAnimal(animal.pk_animal)}><b>{formatearCodigoAnimal(animal.codigo_animal)}</b><span>{animal.icono}</span><small>{animal.nombre}</small></button>)}</div></section>
-      <section className="tarjeta panel-operacion"><div className="monto-agregar"><label>{t('monto')}<div className="campo-monto"><span>$</span><input ref={referenciaMonto} aria-label={t('monto')} inputMode="decimal" value={monto} onKeyDown={manejarTecla} onChange={(evento) => establecerMonto(evento.target.value)} /></div></label><button type="button" className="boton-secundario ancho-completo" onClick={agregarJugada}>{t('agregar')} ↵</button></div><div className="titulo-panel"><h2>2. {t('sorteos')}</h2><span>{horariosSeleccionados.length} seleccionados</span></div><div className="filtros-sorteos" role="group" aria-label={t('filtrar_sorteos')}><button type="button" className={filtroSorteo === 'todos' ? 'activo' : ''} aria-pressed={filtroSorteo === 'todos'} onClick={() => establecerFiltroSorteo('todos')}>{t('todos')}</button>{tiposSorteo.map((sorteo) => <button type="button" key={sorteo} className={filtroSorteo === sorteo ? 'activo' : ''} aria-pressed={filtroSorteo === sorteo} onClick={() => establecerFiltroSorteo(sorteo)}>{sorteo}</button>)}</div><div className="lista-sorteos">{horariosVisibles.map((horario) => <label className={`opcion-sorteo ${horariosSeleccionados.includes(horario.pk_horario_sorteo) ? 'seleccionado' : ''}`} key={horario.pk_horario_sorteo}><input type="checkbox" checked={horariosSeleccionados.includes(horario.pk_horario_sorteo)} onChange={() => alternar(horario.pk_horario_sorteo, horariosSeleccionados, establecerHorarios)} /><span><b>{horario.sorteo}</b><small>{horario.hora}</small></span></label>)}</div></section>
+      <section className="tarjeta panel-operacion"><div className="monto-agregar"><label>{t('monto')}<div className="campo-monto"><span>$</span><input ref={referenciaMonto} aria-label={t('monto')} type="number" min="1" step="0.01" inputMode="decimal" value={monto} onKeyDown={manejarTecla} onChange={(evento) => { const valor = evento.target.value; if (valor === '' || Number(valor) >= 1) establecerMonto(valor); }} onBlur={() => { if (!monto || Number(monto) < 1) establecerMonto('1'); }} /></div></label><button type="button" className="boton-secundario ancho-completo" onClick={agregarJugada}>{t('agregar')} ↵</button></div><div className="titulo-panel"><h2>2. {t('sorteos')}</h2><span>{horariosSeleccionados.length} seleccionados</span></div><div className="filtros-sorteos" role="group" aria-label={t('filtrar_sorteos')}><button type="button" className={filtroSorteo === 'todos' ? 'activo' : ''} aria-pressed={filtroSorteo === 'todos'} onClick={() => establecerFiltroSorteo('todos')}>{t('todos')}</button>{tiposSorteo.map((sorteo) => <button type="button" key={sorteo} className={filtroSorteo === sorteo ? 'activo' : ''} aria-pressed={filtroSorteo === sorteo} onClick={() => establecerFiltroSorteo(sorteo)}>{sorteo}</button>)}</div><div className="lista-sorteos">{horariosVisibles.map((horario) => <label className={`opcion-sorteo ${horariosSeleccionados.includes(horario.pk_horario_sorteo) ? 'seleccionado' : ''}`} key={horario.pk_horario_sorteo}><input type="checkbox" checked={horariosSeleccionados.includes(horario.pk_horario_sorteo)} onChange={() => alternarHorario(horario.pk_horario_sorteo)} /><span><b>{horario.sorteo}</b><small>{horario.hora}</small></span></label>)}</div></section>
       <aside className="tarjeta panel-ticket"><div className="lista-jugadas">{jugadas.length === 0 ? <p className="vacio">{t('no_hay_jugadas')}</p> : jugadas.map((jugada, indice) => { const animal = animalesPorId.get(jugada.fk_animal); const horario = horariosPorId.get(jugada.fk_horario_sorteo); return <div className="fila-jugada" key={`${jugada.fk_animal}-${jugada.fk_horario_sorteo}`}><span className="detalle-jugada"><span>{animal?.icono} <b>{animal ? formatearCodigoAnimal(animal.codigo_animal) : ''}</b></span><span>{animal?.nombre}</span><small>{horario?.sorteo} {horario?.hora}</small></span><strong>${jugada.monto.toFixed(2)}</strong><button type="button" aria-label="Eliminar jugada" onClick={() => establecerJugadas(jugadas.filter((_, posicion) => posicion !== indice))}>×</button></div>; })}</div><div className="total total-superior"><span>Total ticket</span><strong>${total.toFixed(2)}</strong></div><button className="boton-primario ancho-completo" disabled={!jugadas.length || emitiendo}>{emitiendo ? '…' : t('emitir')}</button></aside>
     </form>
     <section className="acciones-ticket tarjeta" aria-label="Acciones de ticket">
+      <button type="button" onClick={limpiarJugadas}>{t('limpiar_jugadas')}</button>
       <button type="button">Repetir ticket</button>
       <button type="button">Anular ticket</button>
       <button type="button">Pagar ticket</button>
