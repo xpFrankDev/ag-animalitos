@@ -2,7 +2,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class NormalizarCodigosAnimales1710000001000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query("UPDATE animales SET codigo_animal = LPAD(codigo_animal, 2, '0') WHERE codigo_animal IN ('1', '2', '3', '4', '5', '6', '7', '8', '9')");
+    await queryRunner.query("UPDATE animales AS origen LEFT JOIN animales AS destino ON destino.codigo_animal = LPAD(origen.codigo_animal, 2, '0') SET origen.codigo_animal = LPAD(origen.codigo_animal, 2, '0') WHERE origen.codigo_animal IN ('1', '2', '3', '4', '5', '6', '7', '8', '9') AND destino.pk_animal IS NULL");
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
