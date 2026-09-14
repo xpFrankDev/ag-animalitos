@@ -23,6 +23,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
   const [sesionVencida, establecerSesionVencida] = useState(false);
   const [ultimoTicket, establecerUltimoTicket] = useState<Ticket | null>(null);
   const [filtroSorteo, establecerFiltroSorteo] = useState('todos');
+  const [horaVenezuela, establecerHoraVenezuela] = useState('');
   const referenciaMonto = useRef<HTMLInputElement>(null);
 
   function gestionarError(error: unknown) {
@@ -36,6 +37,12 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
     const temporizador = window.setTimeout(alVencerSesion, 2_500);
     return () => window.clearTimeout(temporizador);
   }, [sesionVencida, alVencerSesion]);
+  useEffect(() => {
+    const actualizarHora = () => establecerHoraVenezuela(new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit' }).format(new Date()));
+    actualizarHora();
+    const intervalo = window.setInterval(actualizarHora, 30_000);
+    return () => window.clearInterval(intervalo);
+  }, []);
   const animalesPorId = useMemo(() => new Map(inicio?.animales.map((animal) => [animal.pk_animal, animal]) ?? []), [inicio]);
   const animalesOrdenados = useMemo(() => [...(inicio?.animales ?? [])].sort((primero, segundo) => Number.parseInt(primero.codigo_animal, 10) - Number.parseInt(segundo.codigo_animal, 10)), [inicio]);
   const horariosPorId = useMemo(() => new Map(inicio?.horarios.map((horario) => [horario.pk_horario_sorteo, horario]) ?? []), [inicio]);
@@ -71,12 +78,17 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
   if (sesionVencida) return <section className="estado-sesion tarjeta" role="status"><h1>{t('sesion_vencida')}</h1><p>{t('sesion_vencida_descripcion')}</p><button type="button" className="boton-primario" onClick={alVencerSesion}>{t('salir')}</button></section>;
   if (!inicio) return <p className="estado-pagina mensaje-error">{mensaje || 'No fue posible cargar la Agencia.'}</p>;
   return <section className="ventas">
-    <div className="encabezado-ventas"><div><p className="etiqueta nombre-agencia">{inicio.agencia.nombre_agencia} · {inicio.agencia.codigo_agencia}</p><h1>{t('venta')}</h1></div></div>
+    <div className="encabezado-ventas"><p className="etiqueta nombre-agencia">{inicio.agencia.nombre_agencia} · {inicio.agencia.codigo_agencia}</p><time className="hora-venezuela">Hora Venezuela: {horaVenezuela}</time></div>
     <form className="rejilla-ventas" onSubmit={emitir}>
       <section className="tarjeta panel-animales"><div className="titulo-panel"><span>{animalesSeleccionados.length} seleccionados</span></div><div className="rejilla-animales">{animalesOrdenados.map((animal) => <button type="button" key={animal.pk_animal} aria-pressed={animalesSeleccionados.includes(animal.pk_animal)} className={`animal ${animalesSeleccionados.includes(animal.pk_animal) ? 'seleccionado' : ''}`} onClick={() => alternarAnimal(animal.pk_animal)}><b>{formatearCodigoAnimal(animal.codigo_animal)}</b><span>{animal.icono}</span><small>{animal.nombre}</small></button>)}</div></section>
       <section className="tarjeta panel-operacion"><div className="monto-agregar"><label>{t('monto')}<div className="campo-monto"><span>$</span><input ref={referenciaMonto} aria-label={t('monto')} inputMode="decimal" value={monto} onKeyDown={manejarTecla} onChange={(evento) => establecerMonto(evento.target.value)} /></div></label><button type="button" className="boton-secundario ancho-completo" onClick={agregarJugada}>{t('agregar')} ↵</button></div><div className="titulo-panel"><h2>2. {t('sorteos')}</h2><span>{horariosSeleccionados.length} seleccionados</span></div><div className="filtros-sorteos" role="group" aria-label={t('filtrar_sorteos')}><button type="button" className={filtroSorteo === 'todos' ? 'activo' : ''} aria-pressed={filtroSorteo === 'todos'} onClick={() => establecerFiltroSorteo('todos')}>{t('todos')}</button>{tiposSorteo.map((sorteo) => <button type="button" key={sorteo} className={filtroSorteo === sorteo ? 'activo' : ''} aria-pressed={filtroSorteo === sorteo} onClick={() => establecerFiltroSorteo(sorteo)}>{sorteo}</button>)}</div><div className="lista-sorteos">{horariosVisibles.map((horario) => <label className={`opcion-sorteo ${horariosSeleccionados.includes(horario.pk_horario_sorteo) ? 'seleccionado' : ''}`} key={horario.pk_horario_sorteo}><input type="checkbox" checked={horariosSeleccionados.includes(horario.pk_horario_sorteo)} onChange={() => alternar(horario.pk_horario_sorteo, horariosSeleccionados, establecerHorarios)} /><span><b>{horario.sorteo}</b><small>{horario.hora}</small></span></label>)}</div></section>
       <aside className="tarjeta panel-ticket"><div className="lista-jugadas">{jugadas.length === 0 ? <p className="vacio">{t('no_hay_jugadas')}</p> : jugadas.map((jugada, indice) => { const animal = animalesPorId.get(jugada.fk_animal); const horario = horariosPorId.get(jugada.fk_horario_sorteo); return <div className="fila-jugada" key={`${jugada.fk_animal}-${jugada.fk_horario_sorteo}`}><span>{animal?.icono} <b>{animal ? formatearCodigoAnimal(animal.codigo_animal) : ''}</b> · {animal?.nombre}<small>{horario?.sorteo} {horario?.hora}</small></span><strong>${jugada.monto.toFixed(2)}</strong><button type="button" aria-label="Eliminar jugada" onClick={() => establecerJugadas(jugadas.filter((_, posicion) => posicion !== indice))}>×</button></div>; })}</div><div className="total total-superior"><span>Total ticket</span><strong>${total.toFixed(2)}</strong></div><button className="boton-primario ancho-completo" disabled={!jugadas.length || emitiendo}>{emitiendo ? '…' : t('emitir')}</button></aside>
     </form>
+    <section className="acciones-ticket tarjeta" aria-label="Acciones de ticket">
+      <button type="button">Repetir ticket</button>
+      <button type="button">Anular ticket</button>
+      <button type="button">Pagar ticket</button>
+    </section>
     {mensaje && <div className="notificacion" role="status">{mensaje}</div>}
     {ultimoTicket && <section className="recibo"><span>✓</span><div><strong>{t('ticket')} #{ultimoTicket.numero_ticket}</strong><p>Serial: {ultimoTicket.serial} · ${Number(ultimoTicket.total_jugado).toFixed(2)}</p></div></section>}
   </section>;
