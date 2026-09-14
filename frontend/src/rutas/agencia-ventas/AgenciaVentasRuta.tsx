@@ -22,12 +22,20 @@ function sigueDisponible(horario: Horario, minutosCierre: number, minutosActuale
   return horario.disponible && minutosActuales < (hora * 60) + minuto - minutosCierre;
 }
 
+function codigoAnimalComparable(codigo: string) {
+  const valor = codigo.trim();
+  if (valor === '0' || valor === '00') return valor;
+  const numero = Number(valor);
+  return Number.isInteger(numero) && numero >= 1 && numero <= 36 ? formatearCodigoAnimal(String(numero)) : '';
+}
+
 export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; alVencerSesion: () => void }) {
   const { t } = useTranslation();
   const [inicio, establecerInicio] = useState<Inicio | null>(null);
   const [animalesSeleccionados, establecerAnimales] = useState<number[]>([]);
   const [horariosSeleccionados, establecerHorarios] = useState<number[]>([]);
   const [monto, establecerMonto] = useState('1');
+  const [codigoAnimalManual, establecerCodigoAnimalManual] = useState('');
   const [jugadas, establecerJugadas] = useState<Jugada[]>([]);
   const [mensaje, establecerMensaje] = useState('');
   const [cargando, establecerCargando] = useState(true);
@@ -38,6 +46,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
   const [horaVenezuela, establecerHoraVenezuela] = useState('');
   const [marcaHoraVenezuela, establecerMarcaHoraVenezuela] = useState(() => Date.now());
   const referenciaMonto = useRef<HTMLInputElement>(null);
+  const referenciaAnimalManual = useRef<HTMLInputElement>(null);
 
   function gestionarError(error: unknown) {
     if (error instanceof ErrorApi && error.estado === 401) { establecerSesionVencida(true); return; }
@@ -62,6 +71,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
   }, []);
   const animalesPorId = useMemo(() => new Map(inicio?.animales.map((animal) => [animal.pk_animal, animal]) ?? []), [inicio]);
   const animalesOrdenados = useMemo(() => [...(inicio?.animales ?? [])].sort((primero, segundo) => Number.parseInt(primero.codigo_animal, 10) - Number.parseInt(segundo.codigo_animal, 10)), [inicio]);
+  const animalesPorCodigo = useMemo(() => new Map(animalesOrdenados.map((animal) => [codigoAnimalComparable(animal.codigo_animal), animal])), [animalesOrdenados]);
   const horariosPorId = useMemo(() => new Map(inicio?.horarios.map((horario) => [horario.pk_horario_sorteo, horario]) ?? []), [inicio]);
   const minutosActuales = useMemo(() => minutosEnVenezuela(new Date(marcaHoraVenezuela)), [marcaHoraVenezuela]);
   const horariosDisponibles = useMemo(() => inicio?.horarios.filter((horario) => sigueDisponible(horario, inicio.agencia.minutos_cierre, minutosActuales)) ?? [], [inicio, minutosActuales]);
@@ -84,13 +94,25 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
     alternar(pkHorario, horariosSeleccionados, establecerHorarios);
     window.requestAnimationFrame(() => referenciaMonto.current?.focus());
   }
+  function seleccionarAnimalManual() {
+    const codigo = codigoAnimalComparable(codigoAnimalManual);
+    const animal = animalesPorCodigo.get(codigo);
+    if (!animal) { establecerMensaje(t('animal_no_disponible')); referenciaAnimalManual.current?.focus(); return; }
+    if (animalesSeleccionados.includes(animal.pk_animal)) { establecerMensaje(t('animal_ya_seleccionado', { codigo: formatearCodigoAnimal(animal.codigo_animal) })); referenciaAnimalManual.current?.focus(); return; }
+    establecerAnimales((actuales) => [...actuales, animal.pk_animal]);
+    establecerCodigoAnimalManual(''); establecerMensaje('');
+    window.requestAnimationFrame(() => referenciaMonto.current?.focus());
+  }
   function limpiarJugadas() {
     establecerAnimales([]); establecerHorarios([]); establecerJugadas([]); establecerMonto('1'); establecerMensaje('');
     window.requestAnimationFrame(() => referenciaMonto.current?.focus());
   }
   function agregarJugada() {
     const montoNumerico = Number(monto.replace(',', '.'));
-    if (!inicio || !animalesSeleccionados.length || !horariosSeleccionados.length) { establecerMensaje(''); return; }
+    if (!inicio) return;
+    if (!animalesSeleccionados.length && !horariosSeleccionados.length) { establecerMensaje(t('selecciona_animal_y_sorteo')); referenciaAnimalManual.current?.focus(); return; }
+    if (!animalesSeleccionados.length) { establecerMensaje(t('selecciona_animal')); referenciaAnimalManual.current?.focus(); return; }
+    if (!horariosSeleccionados.length) { establecerMensaje(t('selecciona_sorteo')); return; }
     const montoMinimo = Math.max(1, inicio.agencia.jugada_minima);
     if (!Number.isFinite(montoNumerico) || montoNumerico < montoMinimo) { establecerMensaje(t('monto_minimo', { monto: montoMinimo.toFixed(2) })); return; }
     const nuevas = animalesSeleccionados.flatMap((fk_animal) => horariosSeleccionados.map((fk_horario_sorteo) => ({ fk_animal, fk_horario_sorteo, monto: montoNumerico })));
@@ -105,8 +127,10 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
     }); establecerAnimales([]); establecerHorarios([]); establecerMensaje('');
   }
   function manejarTecla(evento: KeyboardEvent<HTMLInputElement>) { if (evento.key === 'Enter') { evento.preventDefault(); agregarJugada(); } }
+  function manejarTeclaAnimal(evento: KeyboardEvent<HTMLInputElement>) { if (evento.key === 'Enter') { evento.preventDefault(); seleccionarAnimalManual(); } }
+  function informarAccionTicket(accion: string) { establecerMensaje(t('accion_requiere_ticket', { accion })); }
   async function emitir(evento: FormEvent) {
-    evento.preventDefault(); if (!jugadas.length) return;
+    evento.preventDefault(); if (!jugadas.length) { establecerMensaje(t('agrega_jugada_antes_emitir')); return; }
     establecerEmitiendo(true); establecerMensaje('');
     try { const ticket = await llamarApi<Ticket>('/agencia/tickets', { method: 'POST', body: JSON.stringify({ jugadas }) }, token); establecerUltimoTicket(ticket); establecerJugadas([]); establecerMensaje(t('venta_exitosa')); }
     catch (error) { gestionarError(error); } finally { establecerEmitiendo(false); }
@@ -119,14 +143,14 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
     <div className="encabezado-ventas"><p className="etiqueta nombre-agencia">{inicio.agencia.nombre_agencia} · {inicio.agencia.codigo_agencia}</p><time className="hora-venezuela">Hora Venezuela: {horaVenezuela}</time></div>
     <form className="rejilla-ventas" onSubmit={emitir}>
       <section className="tarjeta panel-animales"><div className="titulo-panel"><span>{animalesSeleccionados.length} seleccionados</span></div><div className="rejilla-animales">{animalesOrdenados.map((animal) => <button type="button" key={animal.pk_animal} aria-pressed={animalesSeleccionados.includes(animal.pk_animal)} className={`animal ${animalesSeleccionados.includes(animal.pk_animal) ? 'seleccionado' : ''}`} onClick={() => alternarAnimal(animal.pk_animal)}><b>{formatearCodigoAnimal(animal.codigo_animal)}</b><span>{animal.icono}</span><small>{animal.nombre}</small></button>)}</div></section>
-      <section className="tarjeta panel-operacion"><div className="monto-agregar"><label>{t('monto')}<div className="campo-monto"><span>$</span><input ref={referenciaMonto} aria-label={t('monto')} type="number" min="1" step="0.01" inputMode="decimal" value={monto} onKeyDown={manejarTecla} onChange={(evento) => { const valor = evento.target.value; if (valor === '' || Number(valor) >= 1) establecerMonto(valor); }} onBlur={() => { if (!monto || Number(monto) < 1) establecerMonto('1'); }} /></div></label><button type="button" className="boton-secundario ancho-completo" onClick={agregarJugada}>{t('agregar')} ↵</button></div><div className="titulo-panel"><h2>2. {t('sorteos')}</h2><span>{horariosSeleccionados.length} seleccionados</span></div><div className="filtros-sorteos" role="group" aria-label={t('filtrar_sorteos')}><button type="button" className={filtroSorteo === 'todos' ? 'activo' : ''} aria-pressed={filtroSorteo === 'todos'} onClick={() => establecerFiltroSorteo('todos')}>{t('todos')}</button>{tiposSorteo.map((sorteo) => <button type="button" key={sorteo} className={filtroSorteo === sorteo ? 'activo' : ''} aria-pressed={filtroSorteo === sorteo} onClick={() => establecerFiltroSorteo(sorteo)}>{sorteo}</button>)}</div><div className="lista-sorteos">{horariosVisibles.map((horario) => <label className={`opcion-sorteo ${horariosSeleccionados.includes(horario.pk_horario_sorteo) ? 'seleccionado' : ''}`} key={horario.pk_horario_sorteo}><input type="checkbox" checked={horariosSeleccionados.includes(horario.pk_horario_sorteo)} onChange={() => alternarHorario(horario.pk_horario_sorteo)} /><span><b>{horario.sorteo}</b><small>{horario.hora}</small></span></label>)}</div></section>
-      <aside className="tarjeta panel-ticket"><div className="lista-jugadas">{jugadas.length === 0 ? <p className="vacio">{t('no_hay_jugadas')}</p> : jugadas.map((jugada, indice) => { const animal = animalesPorId.get(jugada.fk_animal); const horario = horariosPorId.get(jugada.fk_horario_sorteo); return <div className="fila-jugada" key={`${jugada.fk_animal}-${jugada.fk_horario_sorteo}`}><span className="detalle-jugada"><span>{animal?.icono} <b>{animal ? formatearCodigoAnimal(animal.codigo_animal) : ''}</b></span><span>{animal?.nombre}</span><small>{horario?.sorteo} {horario?.hora}</small></span><strong>${jugada.monto.toFixed(2)}</strong><button type="button" aria-label="Eliminar jugada" onClick={() => establecerJugadas(jugadas.filter((_, posicion) => posicion !== indice))}>×</button></div>; })}</div><div className="total total-superior"><span>Total ticket</span><strong>${total.toFixed(2)}</strong></div><button className="boton-primario ancho-completo" disabled={!jugadas.length || emitiendo}>{emitiendo ? '…' : t('emitir')}</button></aside>
+      <section className="tarjeta panel-operacion"><div className="monto-agregar"><label className="animal-manual">{t('animal_manual')}<input ref={referenciaAnimalManual} aria-label={t('animal_manual')} type="text" maxLength={2} inputMode="numeric" autoComplete="off" placeholder="00" value={codigoAnimalManual} onKeyDown={manejarTeclaAnimal} onChange={(evento) => { const valor = evento.target.value; if (/^\d{0,2}$/.test(valor)) establecerCodigoAnimalManual(valor); }} /></label><label>{t('monto')}<div className="campo-monto"><span>$</span><input ref={referenciaMonto} aria-label={t('monto')} type="number" min="1" step="0.01" inputMode="decimal" value={monto} onKeyDown={manejarTecla} onChange={(evento) => { const valor = evento.target.value; if (valor === '' || Number(valor) >= 1) establecerMonto(valor); }} onBlur={() => { if (!monto || Number(monto) < 1) establecerMonto('1'); }} /></div></label><button type="button" className="boton-secundario ancho-completo" onClick={agregarJugada}>{t('agregar')} ↵</button></div><div className="titulo-panel"><h2>2. {t('sorteos')}</h2><span>{horariosSeleccionados.length} seleccionados</span></div><div className="filtros-sorteos" role="group" aria-label={t('filtrar_sorteos')}><button type="button" className={filtroSorteo === 'todos' ? 'activo' : ''} aria-pressed={filtroSorteo === 'todos'} onClick={() => establecerFiltroSorteo('todos')}>{t('todos')}</button>{tiposSorteo.map((sorteo) => <button type="button" key={sorteo} className={filtroSorteo === sorteo ? 'activo' : ''} aria-pressed={filtroSorteo === sorteo} onClick={() => establecerFiltroSorteo(sorteo)}>{sorteo}</button>)}</div><div className="lista-sorteos">{horariosVisibles.map((horario) => <label className={`opcion-sorteo ${horariosSeleccionados.includes(horario.pk_horario_sorteo) ? 'seleccionado' : ''}`} key={horario.pk_horario_sorteo}><input type="checkbox" checked={horariosSeleccionados.includes(horario.pk_horario_sorteo)} onChange={() => alternarHorario(horario.pk_horario_sorteo)} /><span><b>{horario.sorteo}</b><small>{horario.hora}</small></span></label>)}</div></section>
+      <aside className="tarjeta panel-ticket"><div className="lista-jugadas">{jugadas.length === 0 ? <p className="vacio">{t('no_hay_jugadas')}</p> : jugadas.map((jugada, indice) => { const animal = animalesPorId.get(jugada.fk_animal); const horario = horariosPorId.get(jugada.fk_horario_sorteo); return <div className="fila-jugada" key={`${jugada.fk_animal}-${jugada.fk_horario_sorteo}`}><span className="detalle-jugada"><span>{animal?.icono} <b>{animal ? formatearCodigoAnimal(animal.codigo_animal) : ''}</b></span><span>{animal?.nombre}</span><small>{horario?.sorteo} {horario?.hora}</small></span><strong>${jugada.monto.toFixed(2)}</strong><button type="button" aria-label="Eliminar jugada" onClick={() => establecerJugadas(jugadas.filter((_, posicion) => posicion !== indice))}>×</button></div>; })}</div><div className="total total-superior"><span>Total ticket</span><strong>${total.toFixed(2)}</strong></div><button className="boton-primario ancho-completo" disabled={emitiendo}>{emitiendo ? '…' : t('emitir')}</button></aside>
     </form>
     <section className="acciones-ticket tarjeta" aria-label="Acciones de ticket">
       <button type="button" onClick={limpiarJugadas}>{t('limpiar_jugadas')}</button>
-      <button type="button">Repetir ticket</button>
-      <button type="button">Anular ticket</button>
-      <button type="button">Pagar ticket</button>
+      <button type="button" onClick={() => informarAccionTicket('Repetir ticket')}>Repetir ticket</button>
+      <button type="button" onClick={() => informarAccionTicket('Anular ticket')}>Anular ticket</button>
+      <button type="button" onClick={() => informarAccionTicket('Pagar ticket')}>Pagar ticket</button>
     </section>
     {mensaje && <div className="notificacion" role="status">{mensaje}</div>}
     {ultimoTicket && <section className="recibo"><span>✓</span><div><strong>{t('ticket')} #{ultimoTicket.numero_ticket}</strong><p>Serial: {ultimoTicket.serial} · ${Number(ultimoTicket.total_jugado).toFixed(2)}</p></div></section>}
