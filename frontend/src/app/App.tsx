@@ -13,20 +13,21 @@ export function App() {
     return almacenada ? JSON.parse(almacenada) as Sesion : null;
   });
   const [tema, establecerTema] = useState(() => localStorage.getItem(claveTema) ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro'));
+  const [menuMovilAbierto, establecerMenuMovil] = useState(false);
 
   useEffect(() => { document.documentElement.dataset.tema = tema; localStorage.setItem(claveTema, tema); }, [tema]);
   const cambiarIdioma = (idioma: string) => { void i18n.changeLanguage(idioma); localStorage.setItem('ag_idioma', idioma); };
-  const salir = () => { localStorage.removeItem('ag_sesion'); establecerSesion(null); };
+  const salir = () => { localStorage.removeItem('ag_sesion'); establecerSesion(null); establecerMenuMovil(false); };
 
   return <main>
     <header className="barra-superior">
-      <div className="marca-con-menu"><div className="marca"><span>AG</span><small>animalitos</small></div>{sesion && <nav className="menu-principal" aria-label="Navegación principal"><button>Resumen de ventas</button><button>Ver resultados</button><button>Listado de tickets</button></nav>}</div>
+      <div className="marca-con-menu"><div className="marca"><span>AG</span><small>animalitos</small></div>{sesion && <><button className="boton-menu-movil" type="button" aria-expanded={menuMovilAbierto} aria-controls="menu-principal" onClick={() => establecerMenuMovil(!menuMovilAbierto)}>{t('menu')} <span aria-hidden="true">☰</span></button><nav id="menu-principal" className={`menu-principal ${menuMovilAbierto ? 'abierto' : ''}`} aria-label={t('navegacion_principal')}><button type="button" aria-current="page">{t('resumen_ventas')}</button><button type="button">{t('ver_resultados')}</button><button type="button">{t('listado_tickets')}</button></nav></>}</div>
       <div className="preferencias">
-        <label>{t('idioma')}<select value={i18n.language} onChange={(evento) => cambiarIdioma(evento.target.value)}><option value="es">ES</option><option value="it">IT</option></select></label>
-        <label>{t('tema')}<button className="boton-secundario" onClick={() => establecerTema(tema === 'claro' ? 'oscuro' : 'claro')}>{tema === 'claro' ? '☀️' : '🌙'}</button></label>
+        <label className="control-idioma"><span>{t('idioma')}</span><select value={i18n.language} onChange={(evento) => cambiarIdioma(evento.target.value)}><option value="es">ES</option><option value="it">IT</option></select></label>
+        <button className="boton-icono" type="button" aria-label={`${t('tema')}: ${tema === 'claro' ? t('oscuro') : t('claro')}`} onClick={() => establecerTema(tema === 'claro' ? 'oscuro' : 'claro')}>{tema === 'claro' ? '☀️' : '🌙'}</button>
         {sesion && <button className="boton-secundario" onClick={salir}>{t('salir')}</button>}
       </div>
     </header>
-    {sesion ? <AgenciaVentasRuta token={sesion.token} usuario={sesion.usuario.nombre_completo} /> : <InicioSesionRuta alIngresar={(nuevaSesion) => { localStorage.setItem('ag_sesion', JSON.stringify(nuevaSesion)); establecerSesion(nuevaSesion); }} />}
+    {sesion ? <AgenciaVentasRuta token={sesion.token} alVencerSesion={salir} /> : <InicioSesionRuta alIngresar={(nuevaSesion) => { localStorage.setItem('ag_sesion', JSON.stringify(nuevaSesion)); establecerSesion(nuevaSesion); }} />}
   </main>;
 }
