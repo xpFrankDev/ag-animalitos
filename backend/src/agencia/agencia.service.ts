@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { randomUUID } from 'crypto';
+import { randomInt, randomUUID } from 'crypto';
 import { Between, DataSource, In, Not, Repository } from 'typeorm';
 import { EstadoJugada, EstadoTicket, Agencia, Animal, Grupero, HorarioSorteo, JugadaTicket, Resultado, Ticket, TipoUsuario } from '../base-datos/entidades';
 import { CrearVentaDto, JugadaNuevaDto } from './dto/crear-venta.dto';
@@ -86,9 +86,10 @@ export class AgenciaService {
       }
 
       const totalJugado = jugadas.reduce((total, jugada) => total + Math.round(jugada.monto * 100), 0) / 100;
+      const serial = await this.generarSerialTicket(gestor);
       const ticket = gestor.getRepository(Ticket).create({
         pk_ticket: randomUUID(),
-        serial: `AG-${randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`,
+        serial,
         numero_ticket: agenciaBloqueada.proximo_numero_ticket,
         fecha_juego: fechaJuego,
         fk_agencia: agenciaBloqueada.pk_agencia,
@@ -115,6 +116,14 @@ export class AgenciaService {
       acumuladas.set(clave, anterior ? { ...anterior, monto: Math.round((anterior.monto + jugada.monto) * 100) / 100 } : { ...jugada });
     }
     return [...acumuladas.values()];
+  }
+
+  private async generarSerialTicket(gestor: DataSource['manager']): Promise<string> {
+    for (let intento = 0; intento < 10; intento += 1) {
+      const serial = String(randomInt(10_000_000, 100_000_000));
+      if (!(await gestor.getRepository(Ticket).existsBy({ serial }))) return serial;
+    }
+    throw new BadRequestException('No fue posible generar un serial único para el ticket. Inténtalo de nuevo.');
   }
 
   private async validarCupo(gestor: DataSource['manager'], jugada: JugadaNuevaDto, fechaJuego: string, idsAgencias: string[], cupo: number, etiqueta: string): Promise<void> {
@@ -165,7 +174,9 @@ export class AgenciaService {
     const tickets = await this.repositorioTickets.find({ where: { fk_agencia: agencia.pk_agencia, fecha_juego: Between(fechaDesde, fechaHasta), estado: Not(EstadoTicket.CANCELADO) }, relations: { jugadas: { animal: true, horario_sorteo: { sorteo: true } } }, order: { creado_at: 'DESC' } });
     const total_vendido = tickets.reduce((total, ticket) => total + Number(ticket.total_jugado), 0);
     const total_premiado = tickets.reduce((total, ticket) => total + Number(ticket.total_premio), 0);
-    return { desde: fechaDesde, hasta: fechaHasta, total_vendido, total_premiado, porcentaje_premiado: total_vendido ? (total_premiado / total_vendido) * 100 : 0, resto: total_vendido - total_premiado, tickets };
+    const porcentaje_comision = Number(agencia.comision_porcentaje);
+    const total_comision = Math.round(total_vendido * porcentaje_comision) / 100;
+    return { desde: fechaDesde, hasta: fechaHasta, total_vendido, total_premiado, porcentaje_comision, total_comision, resto: total_vendido - total_premiado, tickets };
   }
 
   private validarFecha(fecha?: string): string {
