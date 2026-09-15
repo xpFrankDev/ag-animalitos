@@ -61,5 +61,27 @@ services:
       - "${APP_HOST_IP:-127.0.0.1}:${APP_PORT:-8080}:80"
     restart: unless-stopped
 
+  scrap-resultados:
+    build:
+      context: ./ScrapResultados
+    env_file: .env
+    environment:
+      PUERTO: 3010
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_NOMBRE: ${MARIADB_DATABASE}
+      DB_USUARIO: ${SCRAP_DB_USUARIO}
+      DB_CONTRASENA: ${SCRAP_DB_CONTRASENA}
+      FK_BANQUERO: ${SCRAP_FK_BANQUERO}
+      ZONA_HORARIA: ${SCRAP_ZONA_HORARIA:-America/Caracas}
+      EXPRESION_CRON: ${SCRAP_EXPRESION_CRON:-3,17,33,47 8-19 * * *}
+      TIEMPO_ESPERA_HTTP_MS: ${SCRAP_TIEMPO_ESPERA_HTTP_MS:-20000}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    expose:
+      - "3010"
+    restart: unless-stopped
+
 volumes:
   ag_mariadb_datos:
