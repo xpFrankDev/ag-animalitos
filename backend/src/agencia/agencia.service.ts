@@ -166,6 +166,49 @@ export class AgenciaService {
     return this.repositorioTickets.find({ where: { fk_agencia: agencia.pk_agencia, fecha_juego: Between(fechaDesde, fechaHasta), ...(estado ? { estado: estado as EstadoTicket } : {}) }, relations: { jugadas: { animal: true, horario_sorteo: { sorteo: true } } }, order: { creado_at: 'DESC' }, take: 100 });
   }
 
+  async buscarTicket(sesion: Sesion, fecha?: string, numero?: string) {
+    const agencia = await this.obtenerAgencia(sesion);
+    const fechaJuego = this.validarFecha(fecha);
+    const numeroTicket = Number(numero);
+    if (!Number.isInteger(numeroTicket) || numeroTicket < 1) throw new BadRequestException('Ingresa un número de ticket válido.');
+    const ticket = await this.repositorioTickets.findOne({ where: { fk_agencia: agencia.pk_agencia, fecha_juego: fechaJuego, numero_ticket: numeroTicket }, relations: { jugadas: { animal: true, horario_sorteo: { sorteo: true } } } });
+    if (!ticket) throw new NotFoundException('No se encontró ese ticket para la fecha indicada.');
+    return ticket;
+  }
+
+  private async premioTicket(agencia: Agencia, ticket: Ticket, resultados: Repository<Resultado>): Promise<{ total_premio: number; ids_ganadores: string[] }> {
+    const resultadosDelDia = await resultados.find({ where: { fecha_juego: ticket.fecha_juego, fk_banquero: agencia.fk_banquero } });
+    const ganadoresPorHorario = new Map(resultadosDelDia.map((resultado) => [resultado.fk_horario_sorteo, resultado.fk_animal]));
+    const ganadoras = ticket.jugadas.filter((jugada) => ganadoresPorHorario.get(jugada.fk_horario_sorteo) === jugada.fk_animal);
+    const total_premio = Math.round(ganadoras.reduce((total, jugada) => total + Number(jugada.monto) * 30, 0) * 100) / 100;
+    return { total_premio, ids_ganadores: ganadoras.map((jugada) => jugada.pk_jugada_ticket) };
+  }
+
+  async consultarPago(sesion: Sesion, serial: string) {
+    const agencia = await this.obtenerAgencia(sesion);
+    const ticket = await this.repositorioTickets.findOne({ where: { serial, fk_agencia: agencia.pk_agencia }, relations: { jugadas: { animal: true, horario_sorteo: { sorteo: true } } } });
+    if (!ticket) throw new NotFoundException('Ticket no encontrado.');
+    if (ticket.estado === EstadoTicket.PAGADO) throw new BadRequestException('Este ticket ya fue pagado.');
+    if (ticket.estado === EstadoTicket.CANCELADO) throw new BadRequestException('Un ticket anulado no puede pagarse.');
+    const premio = await this.premioTicket(agencia, ticket, this.origenDatos.getRepository(Resultado));
+    return { serial: ticket.serial, numero_ticket: ticket.numero_ticket, fecha_juego: ticket.fecha_juego, total_pagar: premio.total_premio, jugadas_premiadas: ticket.jugadas.filter((jugada) => premio.ids_ganadores.includes(jugada.pk_jugada_ticket)) };
+  }
+
+  async pagarTicket(sesion: Sesion, serial: string) {
+    const agencia = await this.obtenerAgencia(sesion);
+    return this.origenDatos.transaction(async (gestor) => {
+      const ticket = await gestor.getRepository(Ticket).createQueryBuilder('ticket').setLock('pessimistic_write').leftJoinAndSelect('ticket.jugadas', 'jugadas').where('ticket.serial = :serial AND ticket.fk_agencia = :agencia', { serial, agencia: agencia.pk_agencia }).getOne();
+      if (!ticket) throw new NotFoundException('Ticket no encontrado.');
+      if (ticket.estado === EstadoTicket.PAGADO) throw new BadRequestException('Este ticket ya fue pagado.');
+      if (ticket.estado === EstadoTicket.CANCELADO) throw new BadRequestException('Un ticket anulado no puede pagarse.');
+      const premio = await this.premioTicket(agencia, ticket, gestor.getRepository(Resultado));
+      if (!premio.total_premio) throw new BadRequestException('Este ticket no tiene jugadas premiadas para pagar.');
+      await gestor.getRepository(Ticket).update(ticket.pk_ticket, { estado: EstadoTicket.PAGADO, total_premio: premio.total_premio.toFixed(2), monto_pagado: premio.total_premio.toFixed(2), fk_usuario_modificado: sesion.sub });
+      await gestor.getRepository(JugadaTicket).update({ pk_jugada_ticket: In(premio.ids_ganadores) }, { estado: EstadoJugada.PAGADA, fk_usuario_modificado: sesion.sub });
+      return { mensaje: `Ticket pagado correctamente: ${premio.total_premio.toFixed(2)}.`, total_pagado: premio.total_premio };
+    });
+  }
+
   async resumenVentas(sesion: Sesion, desde?: string, hasta?: string) {
     const agencia = await this.obtenerAgencia(sesion);
     const fechaDesde = this.validarFecha(desde);
