@@ -60,7 +60,7 @@ export class OperacionService {
       permisos: { puede_registrar_resultados: alcance.es_banquero },
       rango: { desde: fechaDesde, hasta: fechaHasta },
       resumen: { total_vendido, total_premiado, tickets: tickets.length, agencias: agencias.length },
-      agencias: agencias.map((agencia) => ({ pk_agencia: agencia.pk_agencia, codigo_agencia: agencia.codigo_agencia, nombre_agencia: agencia.nombre_agencia, activa: agencia.activa, grupero: agencia.fk_grupero, operador: agencia.usuario.nombre_completo })),
+      agencias: agencias.map((agencia) => ({ pk_agencia: agencia.pk_agencia, codigo_agencia: agencia.codigo_agencia, nombre_agencia: agencia.nombre_agencia, activa: agencia.activa, grupero: agencia.fk_grupero, operador: agencia.usuario.nombre_completo, equipo_asignado: Boolean(agencia.serial_pc) })),
       gruperos: gruperos.map((grupero) => ({ pk_grupero: grupero.pk_grupero, nombre_completo: grupero.usuario.nombre_completo, activo: grupero.activo })),
       tickets: tickets.map((ticket) => ({ serial: ticket.serial, numero_ticket: ticket.numero_ticket, fecha_juego: ticket.fecha_juego, estado: ticket.estado, total_jugado: ticket.total_jugado, total_premio: ticket.total_premio, agencia: ticket.agencia.nombre_agencia })),
       resultados,
@@ -90,5 +90,14 @@ export class OperacionService {
     }
     await this.resultados.save(this.resultados.create({ pk_resultado: randomUUID(), fecha_juego, fk_horario_sorteo: horario.pk_horario_sorteo, fk_animal: animal.pk_animal, fk_banquero: alcance.fk_banquero, insertado_at: new Date(), fk_usuario_modificado: sesion.sub }));
     return { mensaje: 'Resultado registrado.' };
+  }
+
+  async liberarSerial(sesion: Sesion, pkAgencia: string) {
+    const alcance = await this.alcance(sesion);
+    const agencia = await this.agencias.findOneBy({ pk_agencia: pkAgencia, fk_banquero: alcance.fk_banquero, ...(alcance.fk_grupero ? { fk_grupero: alcance.fk_grupero } : {}) });
+    if (!agencia) throw new ForbiddenException('La agencia no pertenece a tu operación.');
+    if (!agencia.serial_pc) return { mensaje: 'La taquilla no tiene un equipo asignado.' };
+    await this.agencias.update(agencia.pk_agencia, { serial_pc: null });
+    return { mensaje: 'Equipo liberado. La próxima sesión de la taquilla asignará el nuevo equipo.' };
   }
 }

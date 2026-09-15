@@ -101,7 +101,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
   }
   function alternarHorario(pkHorario: number) {
     alternar(pkHorario, horariosSeleccionados, establecerHorarios);
-    window.requestAnimationFrame(() => referenciaAnimalManual.current?.focus());
+    window.requestAnimationFrame(() => (animalesSeleccionados.length ? referenciaMonto.current : referenciaAnimalManual.current)?.focus());
   }
   function seleccionarAnimalManual() {
     const codigo = codigoAnimalComparable(codigoAnimalManual);
@@ -141,7 +141,14 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; al
   function informarAccionTicket(accion: string) { establecerMensaje(t('accion_requiere_ticket', { accion })); }
   function imprimirTicket() {
     if (!jugadasParaImprimir.length && !ultimoTicket) { establecerMensaje(t('agrega_jugada_antes_imprimir')); return; }
-    window.print();
+    const lineas = [...new Map(jugadasParaImprimir.map((jugada) => [jugada.fk_horario_sorteo, jugada])).values()].flatMap((jugada) => {
+      const horario = horariosPorId.get(jugada.fk_horario_sorteo);
+      const items = jugadasParaImprimir.filter((item) => item.fk_horario_sorteo === jugada.fk_horario_sorteo);
+      return [`${horario?.sorteo ?? ''} ${horario?.hora ?? ''}`, items.map((item) => animalesPorId.get(item.fk_animal)?.nombre.slice(0, 4)).join(' - '), `x${items[0].monto.toFixed(2)}`];
+    });
+    const textoTicket = ['AG · ANIMALITOS', inicio?.agencia.nombre_agencia ?? '', new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', dateStyle: 'short', timeStyle: 'short' }).format(new Date()), '--------------------------------', ...(ultimoTicket ? [`TN: ${ultimoTicket.numero_ticket} · SN: ${ultimoTicket.serial}`] : []), ...lineas, '--------------------------------', `TOTAL: $${totalImprimible.toFixed(2)}`].join('\n');
+    console.log(`%c${textoTicket}`, 'font-family: monospace; font-size: 13px; line-height: 1.45;');
+    establecerMensaje('Vista previa enviada a la consola del navegador.');
   }
   async function emitir(evento: FormEvent) {
     evento.preventDefault(); if (!jugadas.length) { establecerMensaje(t('agrega_jugada_antes_emitir')); return; }

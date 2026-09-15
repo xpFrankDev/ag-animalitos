@@ -33,6 +33,13 @@ export function App() {
   useEffect(() => { const destino = sesion ? rutaPorTipo(sesion.usuario.tipo_usuario) : '/animalitos/login'; if (ruta !== destino) navegar(destino, true); }, [sesion, ruta]);
   const cambiarIdioma = (idioma: string) => { void i18n.changeLanguage(idioma); localStorage.setItem('ag_idioma', idioma); };
   const salir = () => { localStorage.removeItem('ag_sesion'); establecerSesion(null); establecerMenuMovil(false); establecerConsulta(null); navegar('/animalitos/login', true); };
+  useEffect(() => {
+    if (!sesion) return undefined;
+    const restante = sesion.vence_en - Date.now();
+    if (restante <= 0) { salir(); return undefined; }
+    const temporizador = window.setTimeout(salir, restante);
+    return () => window.clearTimeout(temporizador);
+  }, [sesion]);
 
   return <main>
     <header className="barra-superior">
