@@ -22,7 +22,7 @@ export function App() {
     const almacenada = localStorage.getItem('ag_sesion');
     return almacenada ? JSON.parse(almacenada) as Sesion : null;
   });
-  const [tema, establecerTema] = useState(() => localStorage.getItem(claveTema) ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro'));
+  const [tema, establecerTema] = useState(() => localStorage.getItem(claveTema) ?? 'claro');
   const [menuMovilAbierto, establecerMenuMovil] = useState(false);
   const [consultaAbierta, establecerConsulta] = useState<'resultados' | 'tickets' | 'resumen' | null>(null);
   const [ruta, establecerRuta] = useState<RutaAnimalitos>(rutaActual);
