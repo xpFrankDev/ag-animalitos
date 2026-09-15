@@ -25,7 +25,7 @@ export function InicioSesionRuta({ alIngresar }: Propiedades) {
   }
 
   return <section className="contenedor-acceso"><form className="tarjeta acceso" onSubmit={enviar}>
-    <div className="ilustracion">🐋 <span>00</span></div><h1>{t('acceso_agencia')}</h1><p>{t('iniciar_descripcion')}</p>
+    <div className="ilustracion"><img src="/animalitos/ilustraciones/ballena-ticket.png" alt="Ballena con ticket de animalitos" /><span>00</span></div><h1>{t('acceso_agencia')}</h1><p>{t('iniciar_descripcion')}</p>
     <label>{t('usuario')}<input autoComplete="username" value={nombre_usuario} onChange={(evento) => establecerUsuario(evento.target.value)} required /></label>
     <label>{t('contrasena')}<input type="password" autoComplete="current-password" value={contrasena} onChange={(evento) => establecerContrasena(evento.target.value)} required /></label>
     {error && <p className="mensaje-error" role="alert">{error}</p>}
