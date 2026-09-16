@@ -10,7 +10,7 @@
     "test": "jest --runInBand",
     "migracion:ejecutar": "cross-env TIPO_CONEXION=migraciones ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d src/base-datos/origen-datos.ts",
     "migracion:revertir": "cross-env TIPO_CONEXION=migraciones ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:revert -d src/base-datos/origen-datos.ts",
-    "sembrar": "ts-node -r tsconfig-paths/register src/semillas/sembrar.ts"
+    "sembrar": "ts-node -r tsconfig-paths/register src/base-datos/semillas/sembrar.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

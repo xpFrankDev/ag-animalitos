@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sesion } from '../compartido/api/cliente';
-import { InicioSesionRuta } from '../rutas/inicio-sesion/InicioSesionRuta';
-import { AgenciaVentasRuta } from '../rutas/agencia-ventas/AgenciaVentasRuta';
-import { ConsultaAgenciaRuta } from '../rutas/agencia-ventas/ConsultaAgenciaRuta';
-import { OperacionRuta } from '../rutas/operacion/OperacionRuta';
+import { InicioSesionRuta } from '../funcionalidades/autenticacion/InicioSesionRuta';
+import { AgenciaVentasRuta } from '../funcionalidades/agencia/AgenciaVentasRuta';
+import { ConsultaAgenciaRuta } from '../funcionalidades/agencia/ConsultaAgenciaRuta';
+import { OperacionRuta } from '../funcionalidades/operacion/OperacionRuta';
 
 const claveTema = 'ag_tema';
 type RutaAnimalitos = '/animalitos/login' | '/animalitos/taquilla' | '/animalitos/grupero' | '/animalitos/banquero';

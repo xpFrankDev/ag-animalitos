@@ -39,7 +39,7 @@ El producto se identifica como AG · Animalitos. Debe comunicar una herramienta 
 
 - Implementación React/Vite en `frontend/` y API NestJS/MariaDB en `backend/`.
 - Flujo actual de acceso y venta de Agencia.
-- Datos iniciales de animales, sorteos y horarios en `backend/src/semillas/sembrar.ts`.
+- Datos iniciales de animales, sorteos y horarios en `backend/src/base-datos/semillas/sembrar.ts`.
 - No se deben inventar resultados, premios, clientes, agencias ni métricas de negocio.
 
 ## Product Principles

@@ -1,6 +1,6 @@
 import { Controller, Delete, Get, Param, Post, Body, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { GuardiaJwt } from '../autenticacion/guardia-jwt';
+import { GuardiaJwt } from '../autenticacion/guardias/guardia-jwt';
 import { AgenciaService } from './agencia.service';
 import { CrearVentaDto } from './dto/crear-venta.dto';
 

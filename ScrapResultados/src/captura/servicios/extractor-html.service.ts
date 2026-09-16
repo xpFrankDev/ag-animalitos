@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
 import { AnyNode } from 'domhandler';
-import { FuenteResultados, ResultadoExtraido } from './tipos';
-import { normalizarCodigoAnimal, normalizarHora } from './normalizador-resultados';
+import { FuenteResultados, ResultadoExtraido } from '../tipos';
+import { normalizarCodigoAnimal, normalizarHora } from '../utilidades/normalizador-resultados';
 
 const selectoresTarjeta = [
   'div.col-6.col-xl-2.col-lg-3.col-md-4.col-sm-6.d-flex.flex-column.align-items-center',

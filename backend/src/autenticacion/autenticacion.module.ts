@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Agencia, Usuario } from '../base-datos/entidades';
 import { AutenticacionController } from './autenticacion.controller';
 import { AutenticacionService } from './autenticacion.service';
-import { GuardiaJwt } from './guardia-jwt';
+import { GuardiaJwt } from './guardias/guardia-jwt';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Usuario, Agencia]), JwtModule.register({ global: true, secret: process.env.JWT_SECRETO, signOptions: { expiresIn: '10m' } })],

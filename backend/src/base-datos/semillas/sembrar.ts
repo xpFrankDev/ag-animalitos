@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
-import { Agencia, Animal, Grupero, HorarioSorteo, Sorteo, TipoUsuario, Usuario } from '../base-datos/entidades';
-import { origenDatos } from '../base-datos/origen-datos';
+import { Agencia, Animal, Grupero, HorarioSorteo, Sorteo, TipoUsuario, Usuario } from '../entidades';
+import { origenDatos } from '../origen-datos';
 
 const animales = [
   ['00', 'Ballena', '🐋'], ['0', 'Delfín', '🐬'], ['1', 'Carnero', '🐏'], ['2', 'Toro', '🐂'], ['3', 'Ciempiés', '🐛'], ['4', 'Alacrán', '🦂'], ['5', 'León', '🦁'], ['6', 'Rana', '🐸'], ['7', 'Perico', '🦜'], ['8', 'Ratón', '🐭'], ['9', 'Águila', '🦅'], ['10', 'Tigre', '🐯'], ['11', 'Gato', '🐈'], ['12', 'Caballo', '🐴'], ['13', 'Mono', '🐒'], ['14', 'Paloma', '🕊️'], ['15', 'Zorro', '🦊'], ['16', 'Oso', '🐻'], ['17', 'Pavo', '🦃'], ['18', 'Burro', '🐴'], ['19', 'Chivo', '🐐'], ['20', 'Cochino', '🐷'], ['21', 'Gallo', '🐓'], ['22', 'Camello', '🐫'], ['23', 'Cebra', '🦓'], ['24', 'Iguana', '🦎'], ['25', 'Gallina', '🐔'], ['26', 'Vaca', '🐄'], ['27', 'Perro', '🐶'], ['28', 'Zamuro', '🦅'], ['29', 'Elefante', '🐘'], ['30', 'Caimán', '🐊'], ['31', 'Lapa', '🐹'], ['32', 'Ardilla', '🐿️'], ['33', 'Pescado', '🐟'], ['34', 'Venado', '🦌'], ['35', 'Jirafa', '🦒'], ['36', 'Culebra', '🐍'],

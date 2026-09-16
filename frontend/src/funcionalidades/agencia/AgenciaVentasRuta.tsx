@@ -1,37 +1,9 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ErrorApi, llamarApi } from '../../compartido/api/cliente';
-
-type Animal = { pk_animal: number; codigo_animal: string; nombre: string; icono: string };
-type Horario = { pk_horario_sorteo: number; hora: string; sorteo: string; disponible: boolean };
-type Inicio = { agencia: { nombre_agencia: string; codigo_agencia: string; cupo_animal: number; jugada_minima: number; minutos_cierre: number; comision_porcentaje: number }; animales: Animal[]; horarios: Horario[]; multiplicador_premio: number };
-type Jugada = { fk_animal: number; fk_horario_sorteo: number; monto: number };
-type Ticket = { serial: string; numero_ticket: number; total_jugado: number };
-type JugadaTicket = Jugada & { pk_jugada_ticket: string; animal?: { codigo_animal: string; nombre: string; icono: string }; horario_sorteo?: { hora: string; sorteo?: { nombre: string } } };
-type TicketBuscado = { serial: string; numero_ticket: number; fecha_juego: string; total_jugado: string; jugadas: JugadaTicket[] };
-type PagoConsultado = { serial: string; numero_ticket: number; fecha_juego: string; total_pagar: number; jugadas_premiadas: JugadaTicket[] };
-
-function formatearCodigoAnimal(codigo: string) { return codigo === '0' ? codigo : codigo.padStart(2, '0'); }
-
-function minutosEnVenezuela(fecha: Date) {
-  const partes = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(fecha);
-  const hora = Number(partes.find((parte) => parte.type === 'hour')?.value ?? 0);
-  const minuto = Number(partes.find((parte) => parte.type === 'minute')?.value ?? 0);
-  return hora * 60 + minuto;
-}
-
-function sigueDisponible(horario: Horario, minutosCierre: number, minutosActuales: number) {
-  const [hora, minuto] = horario.hora.split(':').map(Number);
-  return horario.disponible && minutosActuales < (hora * 60) + minuto - minutosCierre;
-}
-
-function codigoAnimalComparable(codigo: string) {
-  const valor = codigo.trim();
-  if (valor === '0' || valor === '00') return valor;
-  const numero = Number(valor);
-  return Number.isInteger(numero) && numero >= 1 && numero <= 36 ? formatearCodigoAnimal(String(numero)) : '';
-}
-function fechaCaracas() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas' }).format(new Date()); }
+import { fechaCaracas } from '../../compartido/utilidades/formato';
+import type { Inicio, Jugada, JugadaTicket, PagoConsultado, Ticket, TicketBuscado } from './ventas.tipos';
+import { codigoAnimalComparable, formatearCodigoAnimal, minutosEnVenezuela, sigueDisponible } from './utilidades';
 
 export function AgenciaVentasRuta({ token, alVencerSesion }: { token: string; alVencerSesion: () => void }) {
   const { t } = useTranslation();

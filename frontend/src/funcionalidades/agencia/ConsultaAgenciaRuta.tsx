@@ -1,23 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { llamarApi } from '../../compartido/api/cliente';
-
-type VistaConsulta = 'resultados' | 'tickets' | 'resumen';
-type Resultado = { pk_resultado: string; hora: string; sorteo: string; codigo_animal: string; nombre_animal: string; icono_animal: string; es_demostracion?: boolean };
-type JugadaTicket = { monto: string; animal?: { codigo_animal: string; nombre: string }; horario_sorteo?: { hora: string; sorteo?: { nombre: string } } };
-type Ticket = { serial: string; numero_ticket: number; fecha_juego: string; estado: 'ACTIVO' | 'CANCELADO' | 'PREMIADO' | 'PAGADO'; total_jugado: string; total_premio: string; monto_pagado: string; jugadas?: JugadaTicket[]; es_demostracion?: boolean };
-type Resumen = { desde: string; hasta: string; total_vendido: number; total_premiado: number; porcentaje_comision: number; total_comision: number; resto: number; tickets: Ticket[] };
-
-function fechaCaracas() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas' }).format(new Date()); }
-function inicioSemana(fecha: string) { const valor = new Date(`${fecha}T12:00:00`); valor.setDate(valor.getDate() - ((valor.getDay() + 6) % 7)); return valor.toISOString().slice(0, 10); }
-function formatearMonto(valor: number | string) { return `$${Number(valor).toFixed(2)}`; }
-const ticketsDemostracion: Ticket[] = [{ serial: 'AG-DEMO-240914', numero_ticket: 1204, fecha_juego: fechaCaracas(), estado: 'ACTIVO', total_jugado: '8.00', total_premio: '0.00', monto_pagado: '0.00', es_demostracion: true, jugadas: [{ monto: '4.00', animal: { codigo_animal: '05', nombre: 'León' }, horario_sorteo: { hora: '14:00', sorteo: { nombre: 'Lotto Activo' } } }, { monto: '4.00', animal: { codigo_animal: '18', nombre: 'Burro' }, horario_sorteo: { hora: '16:00', sorteo: { nombre: 'La Granjita' } } }] }];
-
-function NumeroAnimado({ valor, formato = (numero: number) => numero.toFixed(2) }: { valor: number; formato?: (numero: number) => string }) {
-  const [visible, establecerVisible] = useState(0);
-  useEffect(() => { const inicio = performance.now(); let marco = 0; const animar = (ahora: number) => { const avance = Math.min(1, (ahora - inicio) / 3_000); establecerVisible(valor * (1 - ((1 - avance) ** 3))); if (avance < 1) marco = requestAnimationFrame(animar); }; marco = requestAnimationFrame(animar); return () => cancelAnimationFrame(marco); }, [valor]);
-  return <>{formato(visible)}</>;
-}
+import { NumeroAnimado } from '../../compartido/componentes/NumeroAnimado';
+import { fechaCaracas, formatearMonto } from '../../compartido/utilidades/formato';
+import type { Resultado, Resumen, Ticket, VistaConsulta } from './consulta.tipos';
+import { ticketsDemostracion } from './datos-demostracion';
+import { inicioSemana } from './utilidades';
 
 export function ConsultaAgenciaRuta({ token, vista, alCerrar }: { token: string; vista: VistaConsulta; alCerrar: () => void }) {
   const { t } = useTranslation();

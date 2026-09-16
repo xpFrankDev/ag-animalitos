@@ -1,15 +1,9 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ErrorApi, llamarApi } from '../../compartido/api/cliente';
-
-type Vista = 'agencias' | 'tickets' | 'resultados';
-type Agencia = { pk_agencia: string; codigo_agencia: string; nombre_agencia: string; activa: boolean; operador: string; equipo_asignado: boolean; grupero?: string | null; comision_porcentaje?: string; cupo_animal?: string; jugada_minima?: string; minutos_cierre?: number };
-type Inicio = { perfil: { nombre_completo: string; tipo_usuario: 'GRUPERO' | 'BANQUERO' }; permisos: { puede_registrar_resultados: boolean }; resumen: { total_vendido: number; total_premiado: number; tickets: number; agencias: number }; agencias: Agencia[]; gruperos: { pk_grupero: string; nombre_completo: string; activo: boolean }[]; tickets: { serial: string; numero_ticket: number; fecha_juego: string; estado: string; total_jugado: string; agencia: string }[]; resultados: { pk_resultado: string; fecha_juego: string; hora: string; sorteo: string; codigo_animal: string; nombre_animal: string; icono_animal: string }[]; };
-type Catalogo = { animales: { pk_animal: number; codigo_animal: string; nombre: string; icono: string }[]; horarios: { pk_horario_sorteo: number; hora: string; sorteo: string }[] };
-type FormularioAgencia = { codigo_agencia: string; nombre_agencia: string; nombre_usuario: string; contrasena: string; comision_porcentaje: string; cupo_animal: string; jugada_minima: string; minutos_cierre: string; fk_grupero: string; activa: boolean };
-const monto = (valor: number | string) => `$${Number(valor).toFixed(2)}`;
-const fechaCaracas = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas' }).format(new Date());
-const formularioVacio = (): FormularioAgencia => ({ codigo_agencia: '', nombre_agencia: '', nombre_usuario: '', contrasena: '', comision_porcentaje: '12', cupo_animal: '100', jugada_minima: '1', minutos_cierre: '5', fk_grupero: '', activa: true });
+import { formatearMonto as monto, fechaCaracas } from '../../compartido/utilidades/formato';
+import type { Agencia, Catalogo, FormularioAgencia, Inicio, Vista } from './tipos';
+import { formularioVacio } from './utilidades';
 
 export function OperacionRuta({ token, alVencerSesion }: { token: string; alVencerSesion: () => void }) {
   const { t } = useTranslation(); const hoy = fechaCaracas();

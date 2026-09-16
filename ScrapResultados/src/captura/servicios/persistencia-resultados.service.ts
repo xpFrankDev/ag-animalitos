@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
 import { Repository } from 'typeorm';
-import { Animal, HorarioSorteo, Resultado, Sorteo } from '../base-datos/entidades';
-import { ResultadoExtraido } from './tipos';
+import { Animal, HorarioSorteo, Resultado, Sorteo } from '../../base-datos/entidades';
+import { ResultadoExtraido } from '../tipos';
 
 @Injectable()
 export class PersistenciaResultadosService {

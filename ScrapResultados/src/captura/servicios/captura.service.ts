@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ExtractorHtmlService } from './extractor-html.service';
-import { fechaEnZonaHoraria } from './normalizador-resultados';
+import { fechaEnZonaHoraria } from '../utilidades/normalizador-resultados';
 import { PersistenciaResultadosService } from './persistencia-resultados.service';
-import { FuenteResultados } from './tipos';
+import { FuenteResultados } from '../tipos';
 
 const fuentes: FuenteResultados[] = [
   { programa: 'Lotto Activo', enlace_lottoactivo: 'lotto_activo', construirUrl: (fecha) => `https://www.lottoactivo.com/resultados/animalitos/${fecha}/` },

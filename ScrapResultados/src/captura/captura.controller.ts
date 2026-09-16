@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { CapturaService } from './captura.service';
+import { CapturaService } from './servicios/captura.service';
 
 @Controller('salud')
 export class CapturaController {
