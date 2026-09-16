@@ -12,9 +12,9 @@ La fecha se calcula en `America/Caracas`. De 08:00 a 19:59 consulta cuatro veces
 
 ## Protección de los datos
 
-- Los animales se normalizan a dos dígitos: `1`, `01` y `Animal 1` se convierten a `01`.
+- Los animales se normalizan al código canónico de AG: `1`, `01` y `Animal 1` se convierten en `1`, mientras que `00` (Ballena) se conserva distinto de `0` (Delfín).
 - Las horas se convierten a `HH:mm:ss`, incluida la conversión AM/PM.
-- Solo se acepta el rango de animales `00` a `36` y horarios que existan y estén activos en AG.
+- Solo se acepta el rango de animales `0` a `36` y horarios que existan y estén activos en AG.
 - Si la página cambia y no se reconoce ningún resultado válido, el servicio falla esa fuente sin insertar nada.
 - La restricción única de MariaDB y `INSERT IGNORE` hacen la operación idempotente: nunca duplica ni reemplaza un resultado manual ya existente.
 - Una segunda ejecución simultánea se omite para impedir carreras dentro del mismo proceso.

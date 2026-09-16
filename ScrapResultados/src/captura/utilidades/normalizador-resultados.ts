@@ -3,9 +3,12 @@ import { BadRequestException } from '@nestjs/common';
 export function normalizarCodigoAnimal(valor: string): string {
   const coincidencia = valor.match(/\b(\d{1,2})\b/);
   if (!coincidencia) throw new BadRequestException(`No se encontró un código animal válido en «${valor}».`);
-  const numero = Number(coincidencia[1]);
-  if (!Number.isInteger(numero) || numero < 0 || numero > 36) throw new BadRequestException(`El código animal «${coincidencia[1]}» está fuera del rango 00-36.`);
-  return String(numero).padStart(2, '0');
+  const codigo = coincidencia[1];
+  const numero = Number(codigo);
+  if (!Number.isInteger(numero) || numero < 0 || numero > 36) throw new BadRequestException(`El código animal «${codigo}» está fuera del rango 0-36.`);
+  // Los códigos canónicos son 0, 00 y 1-36: los de un dígito no llevan cero a la izquierda y
+  // «00» (Ballena) se conserva distinto de «0» (Delfín).
+  return /^0[1-9]$/.test(codigo) ? codigo.slice(1) : codigo;
 }
 
 export function normalizarHora(valor: string): string {
