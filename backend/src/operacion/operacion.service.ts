@@ -62,41 +62,12 @@ export class OperacionService {
     const fechaDesde = resolverFecha(filtros.desde);
     const fechaHasta = resolverFecha(filtros.hasta ?? filtros.desde);
     if (fechaDesde > fechaHasta) throw new BadRequestException('La fecha inicial no puede ser posterior a la final.');
-    const pagina = Math.max(1, Number(filtros.pagina) || 1);
-    const tamano = Math.min(TAMANO_PAGINA_MAXIMO, Math.max(1, Number(filtros.tamano) || TAMANO_PAGINA_POR_DEFECTO));
 
     const agencias = await this.agencias.find({ where: this.filtroAgencias(alcance), relations: { usuario: true }, order: { nombre_agencia: 'ASC' } });
     const idsAgencias = agencias.map((agencia) => agencia.pk_agencia);
-    const [tickets, totalTickets] = idsAgencias.length
-      ? await this.tickets.findAndCount({
-          where: { fk_agencia: In(idsAgencias), fecha_juego: Between(fechaDesde, fechaHasta) },
-          relations: { agencia: true },
-          order: { creado_at: 'DESC' },
-          skip: (pagina - 1) * tamano,
-          take: tamano,
-        })
-      : [[], 0];
-
-    const resultados = await this.resultados
-      .createQueryBuilder('resultado')
-      .innerJoin(HorarioSorteo, 'horario', 'horario.pk_horario_sorteo = resultado.fk_horario_sorteo')
-      .innerJoin('horario.sorteo', 'sorteo')
-      .innerJoin(Animal, 'animal', 'animal.pk_animal = resultado.fk_animal')
-      .select([
-        'resultado.pk_resultado AS pk_resultado',
-        'resultado.fecha_juego AS fecha_juego',
-        'resultado.origen AS origen',
-        'resultado.aplicado_at AS aplicado_at',
-        'horario.hora AS hora',
-        'sorteo.nombre AS sorteo',
-        'animal.codigo_animal AS codigo_animal',
-        'animal.nombre AS nombre_animal',
-        'animal.icono AS icono_animal',
-      ])
-      .where('resultado.fecha_juego BETWEEN :desde AND :hasta', { desde: fechaDesde, hasta: fechaHasta })
-      .orderBy('resultado.fecha_juego', 'DESC')
-      .addOrderBy('horario.hora', 'ASC')
-      .getRawMany();
+    const totalTickets = idsAgencias.length
+      ? await this.tickets.count({ where: { fk_agencia: In(idsAgencias), fecha_juego: Between(fechaDesde, fechaHasta) } })
+      : 0;
 
     const gruperosDelAlcance = alcance.es_banquero
       ? await this.gruperos.find({
@@ -138,7 +109,6 @@ export class OperacionService {
       },
       rango: { desde: fechaDesde, hasta: fechaHasta },
       resumen: { ...resumen, comision_gruperos, agencias: agencias.length, tickets: totalTickets },
-      paginacion: { pagina, tamano, total: totalTickets, tiene_mas: pagina * tamano < totalTickets },
       agencias: agencias.map((agencia) => ({
         pk_agencia: agencia.pk_agencia,
         codigo_agencia: agencia.codigo_agencia,
@@ -164,6 +134,41 @@ export class OperacionService {
         venta_grupo: ventasPorGrupero.get(grupero.pk_grupero) ?? 0,
         comision_grupo: calcularComision(ventasPorGrupero.get(grupero.pk_grupero) ?? 0, Number(grupero.comision_porcentaje)),
       })),
+    };
+  }
+
+  /** Tickets de la red o del grupo, paginados y filtrables por agencia y estado. */
+  async listarTickets(sesion: Sesion, filtros: FiltrosPanel & { agencia?: string; estado?: string }) {
+    const alcance = await this.alcance(sesion);
+    const fechaDesde = resolverFecha(filtros.desde);
+    const fechaHasta = resolverFecha(filtros.hasta ?? filtros.desde);
+    if (fechaDesde > fechaHasta) throw new BadRequestException('La fecha inicial no puede ser posterior a la final.');
+    const pagina = Math.max(1, Number(filtros.pagina) || 1);
+    const tamano = Math.min(TAMANO_PAGINA_MAXIMO, Math.max(1, Number(filtros.tamano) || TAMANO_PAGINA_POR_DEFECTO));
+    const agencias = await this.agencias.find({ where: this.filtroAgencias(alcance), select: { pk_agencia: true } });
+    const idsAlcance = agencias.map((agencia) => agencia.pk_agencia);
+    const agenciaFiltro = filtros.agencia?.trim() || undefined;
+    if (agenciaFiltro && !idsAlcance.includes(agenciaFiltro)) {
+      throw new ForbiddenException('La agencia no pertenece a tu operación.');
+    }
+    const idsConsulta = agenciaFiltro ? [agenciaFiltro] : idsAlcance;
+    const estado = Object.values(EstadoTicket).includes(filtros.estado as EstadoTicket)
+      ? (filtros.estado as EstadoTicket)
+      : undefined;
+    const [tickets, total] = idsConsulta.length
+      ? await this.tickets.findAndCount({
+          where: {
+            fk_agencia: In(idsConsulta),
+            fecha_juego: Between(fechaDesde, fechaHasta),
+            ...(estado ? { estado } : {}),
+          },
+          relations: { agencia: true },
+          order: { fecha_juego: 'DESC', numero_ticket: 'DESC' },
+          skip: (pagina - 1) * tamano,
+          take: tamano,
+        })
+      : [[], 0];
+    return {
       tickets: tickets.map((ticket) => ({
         serial: ticket.serial,
         numero_ticket: ticket.numero_ticket,
@@ -173,6 +178,38 @@ export class OperacionService {
         total_premio: ticket.total_premio,
         agencia: ticket.agencia.nombre_agencia,
       })),
+      total,
+      pagina,
+      tamano,
+      tiene_mas: pagina * tamano < total,
+    };
+  }
+
+  /** Resultados de un día, ordenados por hora de sorteo, para la sección de resultados. */
+  async listarResultados(sesion: Sesion, fecha?: string) {
+    await this.alcance(sesion);
+    const fechaJuego = resolverFecha(fecha);
+    const resultados = await this.resultados
+      .createQueryBuilder('resultado')
+      .innerJoin(HorarioSorteo, 'horario', 'horario.pk_horario_sorteo = resultado.fk_horario_sorteo')
+      .innerJoin('horario.sorteo', 'sorteo')
+      .innerJoin(Animal, 'animal', 'animal.pk_animal = resultado.fk_animal')
+      .select([
+        'resultado.pk_resultado AS pk_resultado',
+        'resultado.fecha_juego AS fecha_juego',
+        'resultado.origen AS origen',
+        'resultado.aplicado_at AS aplicado_at',
+        'horario.hora AS hora',
+        'sorteo.nombre AS sorteo',
+        'animal.codigo_animal AS codigo_animal',
+        'animal.nombre AS nombre_animal',
+        'animal.icono AS icono_animal',
+      ])
+      .where('resultado.fecha_juego = :fecha', { fecha: fechaJuego })
+      .orderBy('horario.hora', 'ASC')
+      .getRawMany();
+    return {
+      fecha: fechaJuego,
       resultados: resultados.map((resultado) => ({ ...resultado, aplicado: Boolean(resultado.aplicado_at) })),
     };
   }

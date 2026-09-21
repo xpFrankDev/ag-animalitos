@@ -20,15 +20,29 @@ export class OperacionController {
     @Request() solicitud: Solicitud,
     @Query('desde') desde?: string,
     @Query('hasta') hasta?: string,
+  ) {
+    return this.servicio.inicio(solicitud.usuario as never, { desde, hasta });
+  }
+  @Get('tickets') listarTickets(
+    @Request() solicitud: Solicitud,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+    @Query('agencia') agencia?: string,
+    @Query('estado') estado?: string,
     @Query('pagina') pagina?: string,
     @Query('tamano') tamano?: string,
   ) {
-    return this.servicio.inicio(solicitud.usuario as never, {
+    return this.servicio.listarTickets(solicitud.usuario as never, {
       desde,
       hasta,
+      agencia,
+      estado,
       pagina: pagina ? Number(pagina) : undefined,
       tamano: tamano ? Number(tamano) : undefined,
     });
+  }
+  @Get('resultados') listarResultados(@Request() solicitud: Solicitud, @Query('fecha') fecha?: string) {
+    return this.servicio.listarResultados(solicitud.usuario as never, fecha);
   }
   @Get('catalogo-resultados') catalogoResultados(@Request() solicitud: Solicitud) { return this.servicio.catalogoResultados(solicitud.usuario as never); }
   @Post('resultados') registrarResultado(@Request() solicitud: Solicitud, @Body() datos: RegistrarResultadoDto) { return this.servicio.registrarResultado(solicitud.usuario as never, datos); }

@@ -1,4 +1,11 @@
-export type Vista = 'agencias' | 'tickets' | 'resultados' | 'accesos';
+export type Vista = 'resumen' | 'agencias' | 'gruperos' | 'tickets' | 'resultados' | 'accesos';
+
+export type PermisosOperacion = {
+  puede_registrar_resultados: boolean;
+  puede_gestionar_gruperos: boolean;
+  puede_definir_comision: boolean;
+  alcance: 'RED' | 'GRUPO';
+};
 
 export type Agencia = {
   pk_agencia: string;
@@ -40,12 +47,7 @@ export type AccesoBloqueado = {
 
 export type Inicio = {
   perfil: { nombre_completo: string; tipo_usuario: 'GRUPERO' | 'BANQUERO' };
-  permisos: {
-    puede_registrar_resultados: boolean;
-    puede_gestionar_gruperos: boolean;
-    puede_definir_comision: boolean;
-    alcance: 'RED' | 'GRUPO';
-  };
+  permisos: PermisosOperacion;
   rango: { desde: string; hasta: string };
   resumen: {
     total_vendido: number;
@@ -56,30 +58,49 @@ export type Inicio = {
     agencias: number;
     tickets: number;
   };
-  paginacion: { pagina: number; tamano: number; total: number; tiene_mas: boolean };
   agencias: Agencia[];
   gruperos: Grupero[];
-  tickets: {
-    serial: string;
-    numero_ticket: number;
-    fecha_juego: string;
-    estado: string;
-    total_jugado: string;
-    total_premio: string;
-    agencia: string;
-  }[];
-  resultados: {
-    pk_resultado: string;
-    fecha_juego: string;
-    origen: 'AUTOMATICO' | 'MANUAL';
-    hora: string;
-    sorteo: string;
-    codigo_animal: string;
-    nombre_animal: string;
-    icono_animal: string;
-    aplicado: boolean;
-  }[];
 };
+
+export type TicketOperacion = {
+  serial: string;
+  numero_ticket: number;
+  fecha_juego: string;
+  estado: string;
+  total_jugado: string;
+  total_premio: string;
+  agencia: string;
+};
+
+export type PaginaTickets = {
+  tickets: TicketOperacion[];
+  total: number;
+  pagina: number;
+  tamano: number;
+  tiene_mas: boolean;
+};
+
+export type ResultadoOperacion = {
+  pk_resultado: string;
+  fecha_juego: string;
+  origen: 'AUTOMATICO' | 'MANUAL';
+  hora: string;
+  sorteo: string;
+  codigo_animal: string;
+  nombre_animal: string;
+  icono_animal: string;
+  aplicado: boolean;
+};
+
+export type RespuestaResultados = { fecha: string; resultados: ResultadoOperacion[] };
+
+export type ModoFormulario = 'crear' | 'clonar' | 'editar';
+
+/** Aviso temporal para el operador (se muestra como notificación flotante). */
+export type Avisar = (mensaje: string) => void;
+
+/** Trata un error de la API: cierra sesión en 401 y avisa en cualquier otro caso. */
+export type ReportarError = (error: unknown) => void;
 
 export type Catalogo = {
   animales: { pk_animal: number; codigo_animal: string; nombre: string; icono: string }[];
