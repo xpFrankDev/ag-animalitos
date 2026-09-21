@@ -1,5 +1,6 @@
 import { Agencia } from './agencia.entity';
 import { Animal } from './animal.entity';
+import { ControlAcceso } from './control-acceso.entity';
 import { Grupero } from './grupero.entity';
 import { HorarioSorteo } from './horario-sorteo.entity';
 import { JugadaTicket } from './jugada-ticket.entity';
@@ -11,6 +12,7 @@ import { Usuario } from './usuario.entity';
 export * from './estados';
 export * from './usuario.entity';
 export * from './agencia.entity';
+export * from './control-acceso.entity';
 export * from './grupero.entity';
 export * from './animal.entity';
 export * from './sorteo.entity';
@@ -19,4 +21,4 @@ export * from './ticket.entity';
 export * from './jugada-ticket.entity';
 export * from './resultado.entity';
 
-export const entidades = [Usuario, Grupero, Agencia, Animal, Sorteo, HorarioSorteo, Ticket, JugadaTicket, Resultado];
+export const entidades = [Usuario, Grupero, Agencia, Animal, Sorteo, HorarioSorteo, Ticket, JugadaTicket, Resultado, ControlAcceso];

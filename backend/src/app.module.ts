@@ -4,7 +4,9 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AgenciaModule } from './agencia/agencia.module';
 import { AutenticacionModule } from './autenticacion/autenticacion.module';
+import { CalificacionModule } from './calificacion/calificacion.module';
 import { OperacionModule } from './operacion/operacion.module';
+import { SaludModule } from './salud/salud.module';
 import { entidades } from './base-datos/entidades';
 
 @Module({
@@ -23,6 +25,8 @@ import { entidades } from './base-datos/entidades';
     AutenticacionModule,
     AgenciaModule,
     OperacionModule,
+    CalificacionModule,
+    SaludModule,
   ],
 })
 export class AppModule {}

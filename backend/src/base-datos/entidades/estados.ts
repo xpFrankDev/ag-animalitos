@@ -17,3 +17,15 @@ export enum EstadoJugada {
   PREMIADA = 'PREMIADA',
   PAGADA = 'PAGADA',
 }
+
+export enum OrigenResultado {
+  AUTOMATICO = 'AUTOMATICO',
+  MANUAL = 'MANUAL',
+}
+
+/** Alcance del control de intentos de acceso. */
+export enum TipoControlAcceso {
+  USUARIO = 'USUARIO',
+  IP = 'IP',
+  EQUIPO = 'EQUIPO',
+}

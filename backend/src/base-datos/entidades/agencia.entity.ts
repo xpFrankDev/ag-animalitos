@@ -31,6 +31,10 @@ export class Agencia {
   @Column({ default: 1 })
   proximo_numero_ticket!: number;
 
+  /** Jornada a la que corresponde `proximo_numero_ticket`; si cambia el día, vuelve a 1. */
+  @Column({ type: 'date', nullable: true })
+  fecha_numero_ticket!: string | null;
+
   @ManyToOne(() => Usuario, { nullable: false })
   @JoinColumn({ name: 'fk_usuario' })
   usuario!: Usuario;

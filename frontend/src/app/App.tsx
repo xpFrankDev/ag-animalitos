@@ -50,6 +50,6 @@ export function App() {
         {sesion && <button className="boton-secundario" onClick={salir}>{t('salir')}</button>}
       </div>
     </header>
-    {!sesion ? <InicioSesionRuta alIngresar={(nuevaSesion) => { localStorage.setItem('ag_sesion', JSON.stringify(nuevaSesion)); establecerSesion(nuevaSesion); navegar(rutaPorTipo(nuevaSesion.usuario.tipo_usuario), true); }} /> : sesion.usuario.tipo_usuario === 'AGENCIA' ? <><AgenciaVentasRuta token={sesion.token} alVencerSesion={salir} />{consultaAbierta && <ConsultaAgenciaRuta token={sesion.token} vista={consultaAbierta} alCerrar={() => establecerConsulta(null)} />}</> : <OperacionRuta token={sesion.token} alVencerSesion={salir} />}
+    {!sesion ? <InicioSesionRuta alIngresar={(nuevaSesion) => { localStorage.setItem('ag_sesion', JSON.stringify(nuevaSesion)); establecerSesion(nuevaSesion); navegar(rutaPorTipo(nuevaSesion.usuario.tipo_usuario), true); }} /> : sesion.usuario.tipo_usuario === 'AGENCIA' ? <><AgenciaVentasRuta token={sesion.token} alVencerSesion={salir} />{consultaAbierta && <ConsultaAgenciaRuta token={sesion.token} vista={consultaAbierta} alCerrar={() => establecerConsulta(null)} alVencerSesion={salir} />}</> : <OperacionRuta token={sesion.token} alVencerSesion={salir} />}
   </main>;
 }

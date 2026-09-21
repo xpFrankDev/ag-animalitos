@@ -17,8 +17,6 @@ export class PersistenciaResultadosService {
   ) {}
 
   async guardarNuevos(resultado: ResultadoExtraido): Promise<'insertado' | 'existente'> {
-    const banquero = process.env.FK_BANQUERO;
-    if (!banquero) throw new Error('Falta configurar FK_BANQUERO.');
     const [animal, sorteo] = await Promise.all([
       this.animales.findOneBy({ codigo_animal: resultado.codigo_animal, activo: true }),
       this.sorteos.findOneBy({ nombre: resultado.programa, activo: true }),
@@ -30,7 +28,7 @@ export class PersistenciaResultadosService {
 
     const insercion = await this.resultados.createQueryBuilder().insert().into(Resultado).values({
       pk_resultado: randomUUID(), fecha_juego: resultado.fecha_juego, fk_horario_sorteo: horario.pk_horario_sorteo,
-      fk_animal: animal.pk_animal, fk_banquero: banquero, insertado_at: new Date(), fk_usuario_modificado: banquero,
+      fk_animal: animal.pk_animal, origen: 'AUTOMATICO', insertado_at: new Date(), aplicado_at: null, fk_usuario_modificado: null,
     }).orIgnore().execute();
     if (insercion.identifiers.length) {
       this.logger.log(`${resultado.programa} ${resultado.fecha_juego} ${resultado.hora}: animal ${resultado.codigo_animal} insertado.`);

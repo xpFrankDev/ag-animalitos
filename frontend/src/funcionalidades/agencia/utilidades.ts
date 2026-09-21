@@ -1,5 +1,7 @@
 import type { Horario } from './ventas.tipos';
 
+export function claveCupo(fkAnimal: number, fkHorarioSorteo: number) { return `${fkAnimal}-${fkHorarioSorteo}`; }
+
 export function formatearCodigoAnimal(codigo: string) { return codigo === '0' ? codigo : codigo.padStart(2, '0'); }
 
 export function minutosEnVenezuela(fecha: Date) {

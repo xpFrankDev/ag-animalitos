@@ -10,6 +10,8 @@ services:
       MARIADB_PASSWORD: ${MARIADB_PASSWORD}
       MARIADB_MIGRACIONES_USUARIO: ${MARIADB_MIGRACIONES_USUARIO}
       MARIADB_MIGRACIONES_CONTRASENA: ${MARIADB_MIGRACIONES_CONTRASENA}
+      MARIADB_SCRAP_USUARIO: ${MARIADB_SCRAP_USUARIO}
+      MARIADB_SCRAP_CONTRASENA: ${MARIADB_SCRAP_CONTRASENA}
     volumes:
       - ag_mariadb_datos:/var/lib/mysql
       - ./infraestructura/mariadb/inicializar-migraciones.sh:/docker-entrypoint-initdb.d/10-inicializar-migraciones.sh:ro
@@ -44,12 +46,42 @@ services:
     environment:
       DB_HOST: mariadb
       DB_PORT: 3306
+      ZONA_HORARIA: ${ZONA_HORARIA:-America/Caracas}
+      SWAGGER_HABILITADO: ${SWAGGER_HABILITADO:-false}
+      ACCESO_INTENTOS_PERMITIDOS: ${ACCESO_INTENTOS_PERMITIDOS:-3}
+      ACCESO_MINUTOS_BLOQUEO: ${ACCESO_MINUTOS_BLOQUEO:-5}
+      ACCESO_BLOQUEOS_ANTES_DE_BLOQUEO_PERMANENTE: ${ACCESO_BLOQUEOS_ANTES_DE_BLOQUEO_PERMANENTE:-3}
+      CALIFICACION_ACTIVA: ${CALIFICACION_ACTIVA:-true}
+      CALIFICACION_INTERVALO_MS: ${CALIFICACION_INTERVALO_MS:-60000}
     depends_on:
       inicializacion:
         condition: service_completed_successfully
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/salud').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     expose:
       - "3000"
+
+  # Aplica los permisos mínimos del recolector cuando el esquema ya existe.
+  permisos-recolector:
+    image: mariadb:10.11
+    container_name: ag-permisos-recolector
+    env_file: .env
+    environment:
+      DB_HOST: mariadb
+    volumes:
+      - ./infraestructura/mariadb/permisos-recolector.sh:/permisos-recolector.sh:ro
+    entrypoint: ["sh", "/permisos-recolector.sh"]
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      inicializacion:
+        condition: service_completed_successfully
+    restart: "no"
 
   frontend:
     build:
@@ -72,13 +104,14 @@ services:
       DB_NOMBRE: ${MARIADB_DATABASE}
       DB_USUARIO: ${SCRAP_DB_USUARIO}
       DB_CONTRASENA: ${SCRAP_DB_CONTRASENA}
-      FK_BANQUERO: ${SCRAP_FK_BANQUERO}
       ZONA_HORARIA: ${SCRAP_ZONA_HORARIA:-America/Caracas}
       EXPRESION_CRON: ${SCRAP_EXPRESION_CRON:-3,17,33,47 8-19 * * *}
       TIEMPO_ESPERA_HTTP_MS: ${SCRAP_TIEMPO_ESPERA_HTTP_MS:-20000}
     depends_on:
       mariadb:
         condition: service_healthy
+      permisos-recolector:
+        condition: service_completed_successfully
     expose:
       - "3010"
     restart: unless-stopped

@@ -3,7 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { ExtractorHtmlService } from './extractor-html.service';
 import { fechaEnZonaHoraria } from '../utilidades/normalizador-resultados';
 import { PersistenciaResultadosService } from './persistencia-resultados.service';
-import { FuenteResultados } from '../tipos';
+import { FuenteResultados, ResultadosNoDisponibles } from '../tipos';
 
 const fuentes: FuenteResultados[] = [
   { programa: 'Lotto Activo', enlace_lottoactivo: 'lotto_activo', construirUrl: (fecha) => `https://www.lottoactivo.com/resultados/animalitos/${fecha}/` },
@@ -24,16 +24,17 @@ export class CapturaService {
     await this.capturarTodo();
   }
 
-  async capturarTodo(): Promise<{ insertados: number; existentes: number; errores: string[] }> {
+  async capturarTodo(): Promise<{ insertados: number; existentes: number; sin_resultados: string[]; errores: string[] }> {
     if (this.enEjecucion) {
       this.logger.warn('Se omitió la ejecución: la captura anterior todavía está en curso.');
-      return { insertados: 0, existentes: 0, errores: ['Captura ya en ejecución.'] };
+      return { insertados: 0, existentes: 0, sin_resultados: [], errores: ['Captura ya en ejecución.'] };
     }
     this.enEjecucion = true;
     this.ultimaEjecucion = new Date();
     const fecha = fechaEnZonaHoraria(process.env.ZONA_HORARIA ?? 'America/Caracas');
     let insertados = 0;
     let existentes = 0;
+    const sinResultados: string[] = [];
     const errores: string[] = [];
     try {
       for (const fuente of fuentes) {
@@ -46,12 +47,19 @@ export class CapturaService {
           }
         } catch (error) {
           const mensaje = error instanceof Error ? error.message : String(error);
+          if (error instanceof ResultadosNoDisponibles) {
+            sinResultados.push(mensaje);
+            this.logger.warn(mensaje);
+            continue;
+          }
           errores.push(mensaje);
           this.logger.error(mensaje);
         }
       }
-      this.logger.log(`Captura finalizada: ${insertados} insertados, ${existentes} existentes, ${errores.length} errores.`);
-      return { insertados, existentes, errores };
+      this.logger.log(
+        `Captura finalizada: ${insertados} insertados, ${existentes} existentes, ${sinResultados.length} sin resultados, ${errores.length} errores.`,
+      );
+      return { insertados, existentes, sin_resultados: sinResultados, errores };
     } finally {
       this.enEjecucion = false;
     }

@@ -44,8 +44,8 @@ export class Ticket {
   @UpdateDateColumn({ type: 'datetime' })
   modificado_at!: Date;
 
-  @Column()
-  fk_usuario_modificado!: string;
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  fk_usuario_modificado!: string | null;
 
   @OneToMany(() => JugadaTicket, (jugada) => jugada.ticket)
   jugadas!: JugadaTicket[];

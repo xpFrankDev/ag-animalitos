@@ -43,6 +43,6 @@ export class JugadaTicket {
   @UpdateDateColumn({ type: 'datetime' })
   modificado_at!: Date;
 
-  @Column()
-  fk_usuario_modificado!: string;
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  fk_usuario_modificado!: string | null;
 }

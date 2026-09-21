@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsNumber, IsPositive, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsNumber, IsOptional, IsPositive, IsString, Length, ValidateNested } from 'class-validator';
 
 export class JugadaNuevaDto {
   @ApiProperty({ example: 1 })
@@ -24,4 +24,19 @@ export class CrearVentaDto {
   @ValidateNested({ each: true })
   @Type(() => JugadaNuevaDto)
   jugadas!: JugadaNuevaDto[];
+}
+
+/** Comprobación previa a la impresión: cupo vigente o existencia del ticket emitido. */
+export class ValidarVentaDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => JugadaNuevaDto)
+  jugadas?: JugadaNuevaDto[];
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 24)
+  serial?: string;
 }

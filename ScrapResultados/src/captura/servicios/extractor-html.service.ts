@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
 import { AnyNode } from 'domhandler';
-import { FuenteResultados, ResultadoExtraido } from '../tipos';
+import { FuenteResultados, ResultadoExtraido, ResultadosNoDisponibles } from '../tipos';
 import { normalizarCodigoAnimal, normalizarHora } from '../utilidades/normalizador-resultados';
 
 const selectoresTarjeta = [
@@ -21,7 +21,7 @@ export class ExtractorHtmlService {
     const html = await respuesta.text();
     if (fuente.enlace_lottoactivo) return this.extraerLottoActivo(html, fuente, fecha, url);
     const resultados = this.extraerDeHtml(html, fuente, fecha, url);
-    if (!resultados.length) throw new Error(`${fuente.programa}: no se encontraron resultados válidos; no se escribe nada para evitar datos incorrectos.`);
+    if (!resultados.length) throw new ResultadosNoDisponibles(fuente.programa);
     return resultados;
   }
 
@@ -66,7 +66,7 @@ export class ExtractorHtmlService {
       }
     }
     const resultados = [...encontrados.values()].sort((a, b) => a.hora.localeCompare(b.hora));
-    if (!resultados.length) throw new Error(`${fuente.programa}: Lotto Activo no devolvió resultados válidos; no se escribe nada.`);
+    if (!resultados.length) throw new ResultadosNoDisponibles(fuente.programa);
     this.logger.debug(`${fuente.programa}: ${resultados.length} resultados extraídos del endpoint oficial.`);
     return resultados;
   }
