@@ -115,10 +115,10 @@ export function SeccionTickets({ token, agencias, alVencerSesion, avisar }: Prop
               <option value="PAGADO">{t('estado_pagado')}</option>
             </select>
           </label>
+          <button type="button" className="boton-buscar" disabled={cargando} onClick={buscar}>
+            {cargando ? t('actualizando') : t('buscar')}
+          </button>
         </div>
-        <button type="button" className="boton-secundario" disabled={cargando} onClick={buscar}>
-          {cargando ? t('actualizando') : t('buscar')}
-        </button>
       </div>
 
       {error ? (
@@ -128,15 +128,17 @@ export function SeccionTickets({ token, agencias, alVencerSesion, avisar }: Prop
           <div className="tabla-operacion">
             {tickets.map((ticket) => (
               <div key={ticket.serial}>
-                <span>
-                  <strong>
-                    #{ticket.numero_ticket} · {ticket.agencia}
-                  </strong>
+                <span className="titulo-ticket">
+                  <span className="linea-titulo">
+                    <strong>
+                      #{ticket.numero_ticket} · {ticket.agencia}
+                    </strong>
+                    <span className={`estado-ticket ${ticket.estado.toLowerCase()}`}>{t(`estado_${ticket.estado.toLowerCase()}`)}</span>
+                  </span>
                   <small>
                     {ticket.fecha_juego} · {ticket.serial}
                   </small>
                 </span>
-                <span className={`estado-ticket ${ticket.estado.toLowerCase()}`}>{t(`estado_${ticket.estado.toLowerCase()}`)}</span>
                 <strong>{monto(ticket.total_jugado)}</strong>
               </div>
             ))}

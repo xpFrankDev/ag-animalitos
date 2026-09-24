@@ -64,6 +64,21 @@ export function SeccionResultados({ token, permisos, alVencerSesion, avisar, rep
 
   const visibles = filtroSorteo === TODOS ? resultados : resultados.filter((resultado) => resultado.sorteo === filtroSorteo);
 
+  /** El sorteo elegido trae su lista de animales: Guácharo Activo no comparte la de los clásicos. */
+  const animalesDelHorario = useMemo(() => {
+    const grupoId = catalogo?.horarios.find((item) => String(item.pk_horario_sorteo) === horario)?.fk_grupo_animales;
+    const permitidos = catalogo?.grupos.find((grupo) => grupo.pk_grupo_animales === grupoId)?.animales;
+    const animales = catalogo?.animales ?? [];
+    if (!permitidos) return animales;
+    const incluidos = new Set(permitidos);
+    return animales.filter((item) => incluidos.has(item.pk_animal));
+  }, [catalogo, horario]);
+
+  useEffect(() => {
+    if (!animalesDelHorario.length) return;
+    if (!animalesDelHorario.some((item) => String(item.pk_animal) === animal)) establecerAnimal(String(animalesDelHorario[0].pk_animal));
+  }, [animalesDelHorario, animal]);
+
   function buscar() {
     establecerFiltroSorteo(TODOS);
     establecerFechaAplicada(fecha);
@@ -75,8 +90,11 @@ export function SeccionResultados({ token, permisos, alVencerSesion, avisar, rep
       const datos = await llamarApi<Catalogo>('/operacion/catalogo-resultados', {}, token);
       establecerCatalogo(datos);
       establecerFechaResultado(fechaAplicada);
-      establecerHorario(datos.horarios[0] ? String(datos.horarios[0].pk_horario_sorteo) : '');
-      establecerAnimal(datos.animales[0] ? String(datos.animales[0].pk_animal) : '');
+      const primerHorario = datos.horarios[0];
+      const primerGrupo = datos.grupos.find((grupo) => grupo.pk_grupo_animales === primerHorario?.fk_grupo_animales);
+      const primerAnimal = datos.animales.find((item) => !primerGrupo || primerGrupo.animales.includes(item.pk_animal));
+      establecerHorario(primerHorario ? String(primerHorario.pk_horario_sorteo) : '');
+      establecerAnimal(primerAnimal ? String(primerAnimal.pk_animal) : '');
       establecerModal(true);
     } catch (causa) {
       reportarError(causa);
@@ -163,7 +181,7 @@ export function SeccionResultados({ token, permisos, alVencerSesion, avisar, rep
             </button>
           ))}
         </div>
-        <button type="button" className="boton-secundario" disabled={cargando} onClick={buscar}>
+        <button type="button" className="boton-buscar" disabled={cargando} onClick={buscar}>
           {cargando ? t('actualizando') : t('buscar')}
         </button>
       </div>
@@ -226,7 +244,7 @@ export function SeccionResultados({ token, permisos, alVencerSesion, avisar, rep
             <label>
               {t('animal_manual')}
               <select value={animal} onChange={(evento) => establecerAnimal(evento.target.value)} required>
-                {catalogo?.animales.map((item) => (
+                {animalesDelHorario.map((item) => (
                   <option key={item.pk_animal} value={item.pk_animal}>
                     {item.icono} {item.codigo_animal} · {item.nombre}
                   </option>

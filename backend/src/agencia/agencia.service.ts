@@ -8,6 +8,7 @@ import {
   EstadoJugada,
   EstadoTicket,
   Grupero,
+  GrupoAnimales,
   HorarioSorteo,
   JugadaTicket,
   Resultado,
@@ -33,6 +34,7 @@ export class AgenciaService {
     private readonly cupo: CupoService,
     @InjectRepository(Agencia) private readonly repositorioAgencias: Repository<Agencia>,
     @InjectRepository(Animal) private readonly repositorioAnimales: Repository<Animal>,
+    @InjectRepository(GrupoAnimales) private readonly repositorioGrupos: Repository<GrupoAnimales>,
     @InjectRepository(HorarioSorteo) private readonly repositorioHorarios: Repository<HorarioSorteo>,
     @InjectRepository(Ticket) private readonly repositorioTickets: Repository<Ticket>,
   ) {}
@@ -58,29 +60,47 @@ export class AgenciaService {
     jugadas: JugadaNuevaDto[],
     animales: Animal[],
     horarios: HorarioSorteo[],
+    grupos: Map<number, Set<number>>,
     agencia: Agencia,
     fechaJuego: string,
   ): void {
-    const animalesValidos = new Set(animales.map((animal) => animal.pk_animal));
+    const animalesPorId = new Map(animales.map((animal) => [animal.pk_animal, animal]));
     const horariosPorId = new Map(horarios.map((horario) => [horario.pk_horario_sorteo, horario]));
+    const gruposDelTicket = new Set<number>();
     for (const jugada of jugadas) {
-      if (!animalesValidos.has(jugada.fk_animal)) throw new BadRequestException('Uno de los animales ya no está disponible.');
+      const animal = animalesPorId.get(jugada.fk_animal);
+      if (!animal) throw new BadRequestException('Uno de los animales ya no está disponible.');
       const horario = horariosPorId.get(jugada.fk_horario_sorteo);
       if (!horario) throw new BadRequestException('Uno de los sorteos ya no está disponible.');
+      const grupo = horario.sorteo.grupo_animales;
+      if (grupo) {
+        const participantes = grupos.get(grupo.pk_grupo_animales);
+        if (participantes && !participantes.has(animal.pk_animal)) {
+          throw new BadRequestException(
+            `El animal ${animal.codigo_animal} no participa en ${horario.sorteo.nombre}.`,
+          );
+        }
+        gruposDelTicket.add(grupo.pk_grupo_animales);
+      }
       if (jugada.monto < Number(agencia.jugada_minima)) throw new BadRequestException(`La jugada mínima es ${agencia.jugada_minima}.`);
       this.validarCierre(horario, agencia.minutos_cierre, fechaJuego);
+    }
+    if (gruposDelTicket.size > 1) {
+      throw new BadRequestException('Un ticket no puede mezclar sorteos con listas de animales distintas.');
     }
   }
 
   private async validarCatalogo(jugadas: JugadaNuevaDto[], agencia: Agencia, fechaJuego: string): Promise<void> {
-    const [animales, horarios] = await Promise.all([
+    const [animales, horarios, grupos] = await Promise.all([
       this.repositorioAnimales.find({ where: { pk_animal: In(jugadas.map((jugada) => jugada.fk_animal)), activo: true } }),
       this.repositorioHorarios.find({
         where: { pk_horario_sorteo: In(jugadas.map((jugada) => jugada.fk_horario_sorteo)), activo: true },
-        relations: { sorteo: true },
+        relations: { sorteo: { grupo_animales: true } },
       }),
+      this.repositorioGrupos.find({ where: { activo: true }, relations: { animales: true } }),
     ]);
-    this.validarJugadas(jugadas, animales, horarios, agencia, fechaJuego);
+    const participantes = new Map(grupos.map((grupo) => [grupo.pk_grupo_animales, new Set(grupo.animales.map((animal) => animal.pk_animal))]));
+    this.validarJugadas(jugadas, animales, horarios, participantes, agencia, fechaJuego);
   }
 
   private async datosGrupo(fkGrupero: string | null): Promise<{ cupo: number; idsAgencias: string[] } | null> {
@@ -94,11 +114,12 @@ export class AgenciaService {
   async obtenerInicio(sesion: Sesion) {
     const agencia = await this.obtenerAgencia(sesion);
     const fechaJuego = fechaOperacion();
-    const [animales, horarios] = await Promise.all([
+    const [animales, grupos, horarios] = await Promise.all([
       this.repositorioAnimales.find({ where: { activo: true }, order: { codigo_animal: 'ASC' } }),
+      this.repositorioGrupos.find({ where: { activo: true }, relations: { animales: true }, order: { pk_grupo_animales: 'ASC' } }),
       this.repositorioHorarios.find({
         where: { activo: true },
-        relations: { sorteo: true },
+        relations: { sorteo: { grupo_animales: true } },
         order: { fk_sorteo: 'ASC', hora: 'ASC' },
       }),
     ]);
@@ -111,13 +132,21 @@ export class AgenciaService {
         cupo_animal: Number(agencia.cupo_animal),
         jugada_minima: Number(agencia.jugada_minima),
         minutos_cierre: agencia.minutos_cierre,
+        salto_linea: agencia.salto_linea,
         comision_porcentaje: Number(agencia.comision_porcentaje),
       },
       animales,
+      /** Cada grupo trae su lista de animales: la taquilla dibuja solo la del sorteo elegido. */
+      grupos: grupos.map((grupo) => ({
+        pk_grupo_animales: grupo.pk_grupo_animales,
+        nombre: grupo.nombre,
+        animales: grupo.animales.map((animal) => animal.pk_animal),
+      })),
       horarios: horarios.map((horario) => ({
         pk_horario_sorteo: horario.pk_horario_sorteo,
         hora: horario.hora.slice(0, 5),
         sorteo: horario.sorteo.nombre,
+        fk_grupo_animales: horario.sorteo.grupo_animales.pk_grupo_animales,
         multiplicador_premio: Number(horario.sorteo.multiplicador_premio),
         disponible: !this.horarioCerrado(horario, agencia.minutos_cierre, fechaJuego),
       })),

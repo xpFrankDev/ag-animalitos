@@ -29,6 +29,12 @@ export class ActualizarAgenciaDto {
   minutos_cierre?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10)
+  salto_linea?: number;
+
+  @IsOptional()
   @IsBoolean()
   activa?: boolean;
 

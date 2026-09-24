@@ -28,9 +28,13 @@ acumulada de **todas** las agencias de su grupo en el rango consultado.
 
 ## Reglas implementadas
 
-- 38 animales: `00`, `0` y `1` a `36`.
-- Sorteos Lotto Activo, La Granjita y Lotto Internacional, con 12 horarios cada uno.
-- Cada sorteo define su propio multiplicador de premio (los tres actuales parten de 30).
+- Catálogo de animales por listas: la clásica usa 38 animales (`00`, `0` y `1` a `36`) y
+  Guácharo Activo usa 77 (`00`, `0` y `1` a `75`).
+- Sorteos Lotto Activo, La Granjita, Lotto Internacional y Guácharo Activo, con 12 horarios
+  cada uno. Guácharo sortea las mismas horas que Lotto Activo y La Granjita.
+- **Cada sorteo declara su lista de animales y la taquilla dibuja solo esa lista.** Elegir un
+  sorteo de otra lista reemplaza los sorteos marcados: un ticket no puede mezclar listas.
+- Cada sorteo define su propio multiplicador de premio: 30 en los clásicos y 60 en Guácharo Activo.
 - Selección múltiple de animales y sorteos; Enter en el monto agrega las combinaciones.
 - Jugada mínima, minutos de cierre y cupo diario configurable por agencia.
 - **Numeración de tickets por jornada y por agencia: cada día el primer ticket vuelve a 1.**
@@ -39,6 +43,21 @@ acumulada de **todas** las agencias de su grupo en el rango consultado.
   El premio se marca automáticamente cuando el resultado del sorteo se registra.
 - Serial único de 8 dígitos por ticket; las jugadas anuladas dejan de ocupar cupo.
 - Esquema versionado en migraciones TypeORM. No se usa `synchronize`.
+
+## Impresión de la tirilla
+
+La tirilla se compone en `frontend/src/funcionalidades/agencia/ticket.ts` con el formato
+`numero-nombre reducido x monto`, agrupado por sorteo y hora ascendente: las jugadas del
+mismo horario comparten bloque y cada animal conserva su propia entrada. El mismo texto
+alimenta la vista previa y la impresora.
+
+Al imprimir solo se envía el ticket, en flujo normal y a 58 mm de ancho. El tamaño de hoja
+lo define el controlador de la impresora térmica: fijarlo en CSS cortaba la tirilla y el
+navegador repetía el ticket en una segunda hoja.
+
+Cada agencia tiene su propio `salto_linea`: los renglones en blanco que se imprimen después
+del total y de la cantidad de jugadas. Se edita desde el panel del grupero o del banquero y
+su valor por defecto es 0 (impresión sin espacio adicional).
 
 ## Zona horaria
 
@@ -49,7 +68,9 @@ La variable `ZONA_HORARIA` permite cambiarla si el negocio se traslada.
 ## Resultados y premios
 
 1. `ScrapResultados` consulta las fuentes públicas cuatro veces por hora entre 08:00 y 19:59
-   (hora de Venezuela) e inserta los resultados nuevos sin duplicar ni sobrescribir.
+   (hora de Venezuela) e inserta los resultados nuevos sin duplicar ni sobrescribir. Las
+   fuentes son Lotto Activo y Lotto Internacional (lottoactivo.com), La Granjita y
+   Guácharo Activo (loteriadehoy.com).
 2. La API detecta los resultados pendientes (`aplicado_at` nulo) y **califica los tickets**:
    marca las jugadas ganadoras como `PREMIADA` y sus tickets como `PREMIADO`.
 3. Al pagar, el premio se calcula con el multiplicador del sorteo ganador y el ticket pasa a
@@ -117,6 +138,15 @@ contra el entorno local: crea un grupero y una agencia temporales, vende dos tic
 mismo día para comprobar la numeración diaria, registra un resultado, espera la calificación
 automática, paga el premio y borra los datos que creó. Requiere que el entorno esté levantado
 y debe ejecutarse dentro de la jornada de venta.
+
+`infraestructura/verificacion/prueba-cupos-local.sh` comprueba el doble control de cupo:
+que la venta descuente el cupo propio de la agencia, que una jugada que lo excede se rechace
+y que el cupo general del grupero se valide entre todas sus agencias. También crea datos
+temporales y los elimina al terminar.
+
+`infraestructura/verificacion/prueba-guacharo-local.sh` comprueba la lista propia de
+Guácharo Activo: que acepta el animal 40, que los sorteos clásicos lo rechazan, que no se
+pueden mezclar listas en un mismo ticket y que el premio se paga con multiplicador 60.
 
 ## Despliegue en VPS
 

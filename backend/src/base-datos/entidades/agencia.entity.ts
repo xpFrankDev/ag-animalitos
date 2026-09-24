@@ -25,6 +25,10 @@ export class Agencia {
   @Column({ type: 'smallint', default: 5 })
   minutos_cierre!: number;
 
+  /** Saltos de línea en blanco al final de la tirilla; 0 imprime sin espacio adicional. */
+  @Column({ type: 'smallint', default: 0 })
+  salto_linea!: number;
+
   @Column({ type: 'varchar', length: 100, nullable: true })
   serial_pc!: string | null;
 

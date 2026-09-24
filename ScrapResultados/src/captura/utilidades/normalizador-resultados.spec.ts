@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { fechaEnZonaHoraria, normalizarCodigoAnimal, normalizarHora } from './normalizador-resultados';
 
 describe('normalizadores de resultados', () => {
-  it.each([['1', '1'], ['01', '1'], ['05', '5'], ['06', '6'], ['Animal 9', '9'], ['00', '00'], ['0', '0'], ['10', '10'], ['18', '18'], ['36 Tigre', '36']])('normaliza %s como %s', (entrada, esperado) => {
+  it.each([['1', '1'], ['01', '1'], ['05', '5'], ['06', '6'], ['Animal 9', '9'], ['00', '00'], ['0', '0'], ['10', '10'], ['18', '18'], ['36 Tigre', '36'], ['40 Avispa', '40'], ['75 Guacharo', '75']])('normaliza %s como %s', (entrada, esperado) => {
     expect(normalizarCodigoAnimal(entrada)).toBe(esperado);
   });
 
@@ -11,7 +11,7 @@ describe('normalizadores de resultados', () => {
     expect(normalizarCodigoAnimal(String(numero).padStart(2, '0'))).toBe(String(numero));
   });
 
-  it.each([['37', 'está fuera del rango'], ['99', 'está fuera del rango'], ['sin código', 'no tiene dígitos']])('rechaza «%s» cuando %s', (entrada) => {
+  it.each([['sin código', 'no tiene dígitos'], ['', 'no tiene dígitos']])('rechaza «%s» cuando %s', (entrada) => {
     expect(() => normalizarCodigoAnimal(entrada)).toThrow(BadRequestException);
   });
 

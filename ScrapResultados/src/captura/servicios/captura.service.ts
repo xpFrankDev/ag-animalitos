@@ -9,6 +9,7 @@ const fuentes: FuenteResultados[] = [
   { programa: 'Lotto Activo', enlace_lottoactivo: 'lotto_activo', construirUrl: (fecha) => `https://www.lottoactivo.com/resultados/animalitos/${fecha}/` },
   { programa: 'Lotto Internacional', enlace_lottoactivo: 'lotto_activo_internacional', construirUrl: (fecha) => `https://www.lottoactivo.com/resultados/lotto_activo_internacional/${fecha}/` },
   { programa: 'La Granjita', construirUrl: (fecha) => `https://loteriadehoy.com/animalito/lagranjita/resultados/${fecha}/` },
+  { programa: 'Guácharo Activo', construirUrl: (fecha) => `https://loteriadehoy.com/animalito/guacharoactivo/resultados/${fecha}/` },
 ];
 
 @Injectable()

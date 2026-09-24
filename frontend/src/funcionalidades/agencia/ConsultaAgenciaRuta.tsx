@@ -38,16 +38,9 @@ export function ConsultaAgenciaRuta({ token, vista, alCerrar, alVencerSesion }: 
   const [cargando, establecerCargando] = useState(true);
   const [buscando, establecerBuscando] = useState(false);
   const [error, establecerError] = useState('');
-  const [aviso, establecerAviso] = useState('');
   const [versionResultados, establecerVersionResultados] = useState(0);
   const [filtroResultado, establecerFiltroResultado] = useState('todos');
   const [ticketSeleccionado, establecerTicketSeleccionado] = useState('');
-
-  useEffect(() => {
-    if (!aviso) return undefined;
-    const temporizador = window.setTimeout(() => establecerAviso(''), 3_500);
-    return () => window.clearTimeout(temporizador);
-  }, [aviso]);
 
   const cargar = useCallback(
     async (paginaSolicitada: number) => {
@@ -67,7 +60,6 @@ export function ConsultaAgenciaRuta({ token, vista, alCerrar, alVencerSesion }: 
           establecerTickets((actuales) => (paginaSolicitada === 1 ? respuesta.items : [...actuales, ...respuesta.items]));
           establecerTotalTickets(respuesta.total);
           if (paginaSolicitada === 1) establecerTicketSeleccionado(respuesta.items[0]?.serial ?? '');
-          if (!respuesta.total) establecerAviso(t('sin_tickets'));
         }
         if (vista === 'resumen') {
           establecerResumen(
@@ -164,10 +156,10 @@ export function ConsultaAgenciaRuta({ token, vista, alCerrar, alVencerSesion }: 
                   {sorteo}
                 </button>
               ))}
+              <button type="button" className="boton-buscar" disabled={buscando} onClick={buscar}>
+                {t('buscar')}
+              </button>
             </div>
-            <button type="button" className="boton-secundario" disabled={buscando} onClick={buscar}>
-              {t('buscar')}
-            </button>
           </div>
         )}
 
@@ -202,10 +194,10 @@ export function ConsultaAgenciaRuta({ token, vista, alCerrar, alVencerSesion }: 
                   <option value="PAGADO">{t('estado_pagado')}</option>
                 </select>
               </label>
+              <button type="button" className="boton-buscar" onClick={buscar}>
+                {t('buscar')}
+              </button>
             </div>
-            <button type="button" className="boton-secundario" onClick={buscar}>
-              {t('buscar')}
-            </button>
           </div>
         )}
 
@@ -230,10 +222,10 @@ export function ConsultaAgenciaRuta({ token, vista, alCerrar, alVencerSesion }: 
                   onChange={(evento) => establecerHastaResumen(evento.target.value)}
                 />
               </label>
+              <button type="button" className="boton-buscar" onClick={buscar}>
+                {t('buscar')}
+              </button>
             </div>
-            <button type="button" className="boton-secundario" onClick={buscar}>
-              {t('buscar')}
-            </button>
           </div>
         )}
 
@@ -272,13 +264,15 @@ export function ConsultaAgenciaRuta({ token, vista, alCerrar, alVencerSesion }: 
                         key={ticket.serial}
                         onClick={() => establecerTicketSeleccionado(ticket.serial)}
                       >
-                        <span>
-                          <strong>Ticket #{ticket.numero_ticket}</strong>
+                        <span className="titulo-ticket">
+                          <span className="linea-titulo">
+                            <strong>Ticket #{ticket.numero_ticket}</strong>
+                            <span className={`estado-ticket ${ticket.estado.toLowerCase()}`}>{etiquetaEstado(ticket.estado)}</span>
+                          </span>
                           <small>
                             {ticket.fecha_juego} · Serial {ticket.serial}
                           </small>
                         </span>
-                        <span className={`estado-ticket ${ticket.estado.toLowerCase()}`}>{etiquetaEstado(ticket.estado)}</span>
                         <strong>{formatearMonto(ticket.total_jugado)}</strong>
                       </button>
                     ))}
@@ -377,11 +371,6 @@ export function ConsultaAgenciaRuta({ token, vista, alCerrar, alVencerSesion }: 
               </>
             )}
           </div>
-        )}
-        {aviso && (
-          <p className="notificacion emergente" role="status">
-            {aviso}
-          </p>
         )}
       </section>
     </div>

@@ -20,6 +20,8 @@ export type Agencia = {
   cupo_animal: number;
   jugada_minima: number;
   minutos_cierre: number;
+  /** Saltos de línea en blanco al final de la tirilla de esta agencia. */
+  salto_linea: number;
 };
 
 export type Grupero = {
@@ -104,7 +106,9 @@ export type ReportarError = (error: unknown) => void;
 
 export type Catalogo = {
   animales: { pk_animal: number; codigo_animal: string; nombre: string; icono: string }[];
-  horarios: { pk_horario_sorteo: number; hora: string; sorteo: string; multiplicador_premio: number }[];
+  /** Listas de animales por grupo: el sorteo elegido decide cuáles pueden registrarse. */
+  grupos: { pk_grupo_animales: number; nombre: string; animales: number[] }[];
+  horarios: { pk_horario_sorteo: number; hora: string; sorteo: string; fk_grupo_animales: number; multiplicador_premio: number }[];
 };
 
 export type FormularioAgencia = {
@@ -116,6 +120,7 @@ export type FormularioAgencia = {
   cupo_animal: string;
   jugada_minima: string;
   minutos_cierre: string;
+  salto_linea: string;
   fk_grupero: string;
   activa: boolean;
 };

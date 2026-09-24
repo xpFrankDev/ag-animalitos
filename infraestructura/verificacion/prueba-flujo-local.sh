@@ -40,6 +40,10 @@ token_banquero="$(printf '%s' "$respuesta_banquero" | json '.token')"
 [ -n "$token_banquero" ] || { printf 'No se pudo iniciar sesión como banquero: %s\n' "$respuesta_banquero" >&2; exit 1; }
 echo 'Sesión de banquero obtenida.'
 
+# La comisión del panel suma la red completa: se guarda la base para medir solo
+# el efecto de los tickets de esta prueba, aunque existan ventas de otras agencias.
+comision_inicial="$(curl -sS "$api/operacion/inicio" -H "Authorization: Bearer $token_banquero" | json '.resumen.comision_gruperos')"
+
 paso 'Alta de grupero y agencia temporales'
 pk_grupero="$(curl -sS -X POST "$api/operacion/gruperos" -H "Authorization: Bearer $token_banquero" -H 'Content-Type: application/json' \
   -d "$(node -e "process.stdout.write(JSON.stringify({nombre_completo:'Grupero de prueba',nombre_usuario:process.env.USUARIO_GRUPERO,contrasena:process.env.CLAVE, cupo_animal: 300, comision_porcentaje: 4}))")" \
@@ -122,7 +126,9 @@ process.stdout.write(String(fila ? fila.venta_grupo : 'sin grupero'));
 ")"
 echo "Venta del grupo: $venta_grupo · comisión de gruperos: $comision_gruperos (4% de la venta acumulada)"
 [ "$venta_grupo" = '20' ] || { echo 'La venta del grupo no coincide con los dos tickets del mismo día.' >&2; exit 1; }
-[ "$comision_gruperos" = '0.8' ] || { echo 'La comisión del grupero no se calculó sobre la venta acumulada.' >&2; exit 1; }
+comision_prueba="$(node -e "process.stdout.write((Math.round((Number(process.argv[1]) - Number(process.argv[2])) * 100) / 100).toFixed(2))" "$comision_gruperos" "$comision_inicial")"
+echo "Comisión generada por la prueba: $comision_prueba (4% de 20)"
+[ "$comision_prueba" = '0.80' ] || { echo 'La comisión del grupero no se calculó sobre la venta acumulada.' >&2; exit 1; }
 
 paso 'Bloqueo por intentos fallidos'
 # Se bloquea la agencia de prueba: el panel del banquero solo lista accesos de su red.

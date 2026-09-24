@@ -20,7 +20,14 @@ export function codigoAnimalComparable(codigo: string) {
   const valor = codigo.trim();
   if (valor === '0' || valor === '00') return valor;
   const numero = Number(valor);
-  return Number.isInteger(numero) && numero >= 1 && numero <= 36 ? formatearCodigoAnimal(String(numero)) : '';
+  // Los sorteos clásicos llegan al 36 y Guácharo Activo al 75; la lista activa decide cuáles existen.
+  return Number.isInteger(numero) && numero >= 1 && numero <= 99 ? formatearCodigoAnimal(String(numero)) : '';
+}
+
+/** Valor numérico del código para ordenar listas: «00» y «0» van primero. */
+export function valorCodigoAnimal(codigo: string) {
+  const numero = Number.parseInt(codigo, 10);
+  return Number.isNaN(numero) ? Number.MAX_SAFE_INTEGER : numero;
 }
 
 export function inicioSemana(fecha: string) { const valor = new Date(`${fecha}T12:00:00`); valor.setDate(valor.getDate() - ((valor.getDay() + 6) % 7)); return valor.toISOString().slice(0, 10); }

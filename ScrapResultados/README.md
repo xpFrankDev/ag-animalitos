@@ -12,6 +12,7 @@ horario correspondiente.
 - Lotto Activo: `https://www.lottoactivo.com/resultados/animalitos/YYYY-MM-DD/`
 - Lotto Internacional: `https://www.lottoactivo.com/resultados/lotto_activo_internacional/YYYY-MM-DD/`
 - La Granjita: `https://loteriadehoy.com/animalito/lagranjita/resultados/YYYY-MM-DD/`
+- Guácharo Activo: `https://loteriadehoy.com/animalito/guacharoactivo/resultados/YYYY-MM-DD/`
 
 La fecha se calcula en `America/Caracas`. De 08:00 a 19:59 consulta cuatro veces por hora
 (`03, 17, 33 y 47`). Ambos valores se ajustan con `ZONA_HORARIA` y `EXPRESION_CRON`.
@@ -21,7 +22,8 @@ La fecha se calcula en `America/Caracas`. De 08:00 a 19:59 consulta cuatro veces
 - Los animales se normalizan al código canónico de AG: `1`, `01` y `Animal 1` se convierten en
   `1`, mientras que `00` (Ballena) se conserva distinto de `0` (Delfín).
 - Las horas se convierten a `HH:mm:ss`, incluida la conversión AM/PM.
-- Solo se acepta el rango de animales `0` a `36` y horarios existentes y activos en AG.
+- Se aceptan los códigos de dos dígitos (`0` a `99`); qué animales existen de verdad lo
+  decide la lista del sorteo en la base de datos (los clásicos llegan al 36 y Guácharo Activo al 75).
 - Si la página cambia y no se reconoce ningún resultado válido, la fuente falla sin insertar nada.
 - Los resultados son globales por día y horario: la restricción única de MariaDB y `INSERT IGNORE`
   hacen la operación idempotente y nunca reemplazan un resultado manual existente.

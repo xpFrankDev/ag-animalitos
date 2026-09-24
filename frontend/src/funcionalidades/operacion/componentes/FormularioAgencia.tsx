@@ -135,6 +135,18 @@ export function FormularioAgencia({
               required
             />
           </label>
+          <label>
+            {t('salto_linea')}
+            <input
+              type="number"
+              min="0"
+              max="10"
+              value={formulario.salto_linea}
+              onChange={(evento) => alCambiar('salto_linea', evento.target.value)}
+              required
+            />
+            <small className="nota-campo">{t('salto_linea_descripcion')}</small>
+          </label>
           {permisos.puede_gestionar_gruperos && (
             <label>
               {t('grupero_asignado')}

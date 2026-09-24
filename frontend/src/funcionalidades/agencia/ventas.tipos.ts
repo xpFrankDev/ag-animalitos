@@ -1,9 +1,13 @@
 export type Animal = { pk_animal: number; codigo_animal: string; nombre: string; icono: string };
 
+/** Lista de animales que comparten uno o más sorteos; la taquilla dibuja solo la lista activa. */
+export type GrupoAnimales = { pk_grupo_animales: number; nombre: string; animales: number[] };
+
 export type Horario = {
   pk_horario_sorteo: number;
   hora: string;
   sorteo: string;
+  fk_grupo_animales: number;
   multiplicador_premio: number;
   disponible: boolean;
 };
@@ -17,9 +21,12 @@ export type Inicio = {
     cupo_animal: number;
     jugada_minima: number;
     minutos_cierre: number;
+    /** Saltos de línea en blanco al final de la tirilla. */
+    salto_linea: number;
     comision_porcentaje: number;
   };
   animales: Animal[];
+  grupos: GrupoAnimales[];
   horarios: Horario[];
 };
 

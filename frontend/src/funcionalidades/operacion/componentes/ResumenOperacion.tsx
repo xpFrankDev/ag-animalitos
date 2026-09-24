@@ -49,7 +49,7 @@ export function ResumenOperacion({
           {t('hasta')}
           <input type="date" value={hasta} min={desde} onChange={(evento) => alCambiarHasta(evento.target.value)} required />
         </label>
-        <button className="boton-secundario" disabled={cargando}>
+        <button className="boton-buscar" disabled={cargando}>
           {cargando ? t('actualizando') : t('buscar')}
         </button>
       </form>

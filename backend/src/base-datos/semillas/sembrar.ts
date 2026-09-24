@@ -1,18 +1,39 @@
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
-import { Agencia, Animal, Grupero, HorarioSorteo, Sorteo, TipoUsuario, Usuario } from '../entidades';
+import { Repository } from 'typeorm';
+import { Agencia, Animal, Grupero, GrupoAnimales, HorarioSorteo, Sorteo, TipoUsuario, Usuario } from '../entidades';
 import { origenDatos } from '../origen-datos';
 
 const animales = [
   ['00', 'Ballena', '🐋'], ['0', 'Delfín', '🐬'], ['1', 'Carnero', '🐏'], ['2', 'Toro', '🐂'], ['3', 'Ciempiés', '🐛'], ['4', 'Alacrán', '🦂'], ['5', 'León', '🦁'], ['6', 'Rana', '🐸'], ['7', 'Perico', '🦜'], ['8', 'Ratón', '🐭'], ['9', 'Águila', '🦅'], ['10', 'Tigre', '🐯'], ['11', 'Gato', '🐈'], ['12', 'Caballo', '🐴'], ['13', 'Mono', '🐒'], ['14', 'Paloma', '🕊️'], ['15', 'Zorro', '🦊'], ['16', 'Oso', '🐻'], ['17', 'Pavo', '🦃'], ['18', 'Burro', '🐴'], ['19', 'Chivo', '🐐'], ['20', 'Cochino', '🐷'], ['21', 'Gallo', '🐓'], ['22', 'Camello', '🐫'], ['23', 'Cebra', '🦓'], ['24', 'Iguana', '🦎'], ['25', 'Gallina', '🐔'], ['26', 'Vaca', '🐄'], ['27', 'Perro', '🐶'], ['28', 'Zamuro', '🦅'], ['29', 'Elefante', '🐘'], ['30', 'Caimán', '🐊'], ['31', 'Lapa', '🐹'], ['32', 'Ardilla', '🐿️'], ['33', 'Pescado', '🐟'], ['34', 'Venado', '🦌'], ['35', 'Jirafa', '🦒'], ['36', 'Culebra', '🐍'],
+  // Guácharo Activo amplía la lista clásica hasta el 75 (Lotería del Oriente).
+  ['37', 'Tortuga', '🐢'], ['38', 'Búfalo', '🐃'], ['39', 'Lechuza', '🦉'], ['40', 'Avispa', '🐝'], ['41', 'Canguro', '🦘'], ['42', 'Tucán', '🦜'], ['43', 'Mariposa', '🦋'], ['44', 'Chigüire', '🦫'], ['45', 'Garza', '🦢'], ['46', 'Puma', '🐆'], ['47', 'Pavo Real', '🦚'], ['48', 'Puercoespín', '🦔'], ['49', 'Pereza', '🦥'], ['50', 'Canario', '🐤'], ['51', 'Pelícano', '🦩'], ['52', 'Pulpo', '🐙'], ['53', 'Caracol', '🐌'], ['54', 'Grillo', '🦗'], ['55', 'Oso Hormiguero', '🐜'], ['56', 'Tiburón', '🦈'], ['57', 'Pato', '🦆'], ['58', 'Hormiga', '🐜'], ['59', 'Pantera', '🐅'], ['60', 'Camaleón', '🦎'], ['61', 'Panda', '🐼'], ['62', 'Cachicamo', '🦔'], ['63', 'Cangrejo', '🦀'], ['64', 'Gavilán', '🦅'], ['65', 'Araña', '🕷️'], ['66', 'Lobo', '🐺'], ['67', 'Avestruz', '🐦'], ['68', 'Jaguar', '🐆'], ['69', 'Conejo', '🐇'], ['70', 'Bisonte', '🦬'], ['71', 'Guacamaya', '🦜'], ['72', 'Gorila', '🦍'], ['73', 'Hipopótamo', '🦛'], ['74', 'Turpial', '🐦'], ['75', 'Guácharo', '🦇'],
 ] as const;
 
 const MULTIPLICADOR_POR_DEFECTO = 30;
+/** Guácharo Activo paga 60 por cada 1, el doble que los sorteos clásicos. */
+const MULTIPLICADOR_GUACHARO = 60;
+const CODIGO_MAXIMO_CLASICO = 36;
+const codigosCatalogo = animales.map(([codigo]) => codigo);
+const codigosClasicos = codigosCatalogo.filter((codigo) => Number(codigo) <= CODIGO_MAXIMO_CLASICO);
+const codigosGuacharo = codigosCatalogo;
+
+/**
+ * Cada grupo es una lista de animales y cada sorteo declara a cuál pertenece. Guácharo
+ * Activo usa su propia lista (hasta el 75), por eso no comparte tickets con los clásicos.
+ */
+const gruposAnimales = [
+  { nombre: 'Clásico', codigos: codigosClasicos },
+  { nombre: 'Guácharo', codigos: codigosGuacharo },
+] as const;
+
 const sorteosConfigurados = [
-  { nombre: 'Lotto Activo', minutos: 0, multiplicador_premio: MULTIPLICADOR_POR_DEFECTO },
-  { nombre: 'La Granjita', minutos: 0, multiplicador_premio: MULTIPLICADOR_POR_DEFECTO },
-  { nombre: 'Lotto Internacional', minutos: 30, multiplicador_premio: MULTIPLICADOR_POR_DEFECTO },
+  { nombre: 'Lotto Activo', minutos: 0, multiplicador_premio: MULTIPLICADOR_POR_DEFECTO, grupo: 'Clásico' },
+  { nombre: 'La Granjita', minutos: 0, multiplicador_premio: MULTIPLICADOR_POR_DEFECTO, grupo: 'Clásico' },
+  { nombre: 'Lotto Internacional', minutos: 30, multiplicador_premio: MULTIPLICADOR_POR_DEFECTO, grupo: 'Clásico' },
+  // Guácharo Activo sortea las mismas horas que Lotto Activo y La Granjita (08:00 a 19:00).
+  { nombre: 'Guácharo Activo', minutos: 0, multiplicador_premio: MULTIPLICADOR_GUACHARO, grupo: 'Guácharo' },
 ];
 const horasDeJornada = Array.from({ length: 12 }, (_, indice) => indice + 8);
 
@@ -37,6 +58,30 @@ async function obtenerOCrearUsuario(
   );
 }
 
+/**
+ * Crea los grupos y sincroniza sus listas con el catálogo: agregar un animal nuevo al
+ * arreglo de `animales` alcanza para que su grupo quede actualizado en la próxima siembra.
+ */
+async function sembrarGruposAnimales(repositorioAnimales: Repository<Animal>): Promise<Map<string, GrupoAnimales>> {
+  const repositorioGrupos = origenDatos.getRepository(GrupoAnimales);
+  const catalogo = await repositorioAnimales.find();
+  const porCodigo = new Map(catalogo.map((animal) => [animal.codigo_animal, animal]));
+  const grupos = new Map<string, GrupoAnimales>();
+  for (const configuracion of gruposAnimales) {
+    let grupo = await repositorioGrupos.findOne({ where: { nombre: configuracion.nombre }, relations: { animales: true } });
+    if (!grupo) grupo = await repositorioGrupos.save(repositorioGrupos.create({ nombre: configuracion.nombre, activo: true }));
+    const esperados = configuracion.codigos.flatMap((codigo) => porCodigo.get(codigo) ?? []);
+    const actuales = new Set((grupo.animales ?? []).map((animal) => animal.pk_animal));
+    const faltantes = esperados.filter((animal) => !actuales.has(animal.pk_animal));
+    if (faltantes.length) {
+      grupo.animales = [...(grupo.animales ?? []), ...faltantes];
+      grupo = await repositorioGrupos.save(grupo);
+    }
+    grupos.set(configuracion.nombre, grupo);
+  }
+  return grupos;
+}
+
 async function sembrarCatalogo(): Promise<void> {
   const repositorioAnimales = origenDatos.getRepository(Animal);
   for (const [codigo_animal, nombre, icono] of animales) {
@@ -45,14 +90,25 @@ async function sembrarCatalogo(): Promise<void> {
     else if (codigo_animal === '18' && existente.icono !== icono) await repositorioAnimales.update(existente.pk_animal, { icono });
   }
 
+  const grupos = await sembrarGruposAnimales(repositorioAnimales);
   const repositorioSorteos = origenDatos.getRepository(Sorteo);
   const repositorioHorarios = origenDatos.getRepository(HorarioSorteo);
   for (const configuracion of sorteosConfigurados) {
-    let sorteo = await repositorioSorteos.findOneBy({ nombre: configuracion.nombre });
+    const grupo = grupos.get(configuracion.grupo);
+    if (!grupo) throw new Error(`Falta el grupo de animales «${configuracion.grupo}» para ${configuracion.nombre}.`);
+    let sorteo = await repositorioSorteos.findOne({ where: { nombre: configuracion.nombre }, relations: { grupo_animales: true } });
     if (!sorteo) {
       sorteo = await repositorioSorteos.save(
-        repositorioSorteos.create({ nombre: configuracion.nombre, multiplicador_premio: configuracion.multiplicador_premio.toFixed(2), activo: true }),
+        repositorioSorteos.create({
+          nombre: configuracion.nombre,
+          multiplicador_premio: configuracion.multiplicador_premio.toFixed(2),
+          grupo_animales: grupo,
+          activo: true,
+        }),
       );
+    } else if (sorteo.grupo_animales?.pk_grupo_animales !== grupo.pk_grupo_animales) {
+      sorteo.grupo_animales = grupo;
+      sorteo = await repositorioSorteos.save(sorteo);
     }
     for (const hora of horasDeJornada) {
       const valor = `${String(hora).padStart(2, '0')}:${String(configuracion.minutos).padStart(2, '0')}:00`;

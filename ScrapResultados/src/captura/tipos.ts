@@ -1,4 +1,4 @@
-export type Programa = 'Lotto Activo' | 'Lotto Internacional' | 'La Granjita';
+export type Programa = 'Lotto Activo' | 'Lotto Internacional' | 'La Granjita' | 'Guácharo Activo';
 
 export interface ResultadoExtraido {
   programa: Programa;

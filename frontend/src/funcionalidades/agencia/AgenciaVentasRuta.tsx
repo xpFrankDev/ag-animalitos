@@ -1,9 +1,12 @@
-import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FocusEvent, FormEvent, KeyboardEvent, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ErrorApi, llamarApi } from '../../compartido/api/cliente';
 import { fechaCaracas } from '../../compartido/utilidades/formato';
+import { componerTicket } from './ticket';
 import type {
   CupoCombinacion,
+  Horario,
   Inicio,
   Jugada,
   JugadaTicket,
@@ -12,7 +15,7 @@ import type {
   TicketBuscado,
   VerificacionCupo,
 } from './ventas.tipos';
-import { claveCupo, codigoAnimalComparable, formatearCodigoAnimal, minutosEnVenezuela, sigueDisponible } from './utilidades';
+import { claveCupo, codigoAnimalComparable, formatearCodigoAnimal, minutosEnVenezuela, sigueDisponible, valorCodigoAnimal } from './utilidades';
 
 type Propiedades = { token: string; alVencerSesion: () => void };
 
@@ -26,6 +29,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
   const [inicio, establecerInicio] = useState<Inicio | null>(null);
   const [animalesSeleccionados, establecerAnimales] = useState<number[]>([]);
   const [horariosSeleccionados, establecerHorarios] = useState<number[]>([]);
+  const [pkGrupoActivo, establecerPkGrupoActivo] = useState<number | null>(null);
   const [monto, establecerMonto] = useState('1');
   const [codigoAnimalManual, establecerCodigoAnimalManual] = useState('');
   const [jugadas, establecerJugadas] = useState<Jugada[]>([]);
@@ -37,6 +41,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
   const [mostrarAnular, establecerMostrarAnular] = useState(false);
   const [vistaPreviaTicket, establecerVistaPreviaTicket] = useState('');
   const [confirmarLimpieza, establecerConfirmarLimpieza] = useState(false);
+  const [validandoCupo, establecerValidandoCupo] = useState(false);
   const [mostrarRepetir, establecerMostrarRepetir] = useState(false);
   const [fechaRepetir, establecerFechaRepetir] = useState(fechaCaracas);
   const [numeroRepetir, establecerNumeroRepetir] = useState('');
@@ -58,6 +63,8 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
   const [marcaHoraVenezuela, establecerMarcaHoraVenezuela] = useState(() => Date.now());
   const referenciaMonto = useRef<HTMLInputElement>(null);
   const referenciaAnimalManual = useRef<HTMLInputElement>(null);
+  /** El primer clic dentro del monto no debe deshacer la selección completa del foco. */
+  const conservarSeleccionMonto = useRef(false);
 
   const registrarCupos = useCallback((detalle: CupoCombinacion[]) => {
     if (!detalle.length) return;
@@ -112,13 +119,27 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
   }, [mensaje]);
 
   const animalesPorId = useMemo(() => new Map(inicio?.animales.map((animal) => [animal.pk_animal, animal]) ?? []), [inicio]);
-  const animalesOrdenados = useMemo(
-    () => [...(inicio?.animales ?? [])].sort((primero, segundo) => Number.parseInt(primero.codigo_animal, 10) - Number.parseInt(segundo.codigo_animal, 10)),
-    [inicio],
-  );
+  /** Lista de animales de cada grupo: la taquilla solo dibuja la del sorteo elegido. */
+  const gruposPorId = useMemo(() => new Map((inicio?.grupos ?? []).map((grupo) => [grupo.pk_grupo_animales, grupo])), [inicio]);
+  const grupoActivo = (pkGrupoActivo === null ? undefined : gruposPorId.get(pkGrupoActivo)) ?? inicio?.grupos[0];
+  const animalesOrdenados = useMemo(() => {
+    const ids = grupoActivo ? new Set(grupoActivo.animales) : null;
+    return [...(inicio?.animales ?? [])]
+      .filter((animal) => !ids || ids.has(animal.pk_animal))
+      .sort((primero, segundo) => valorCodigoAnimal(primero.codigo_animal) - valorCodigoAnimal(segundo.codigo_animal));
+  }, [inicio, grupoActivo]);
   const animalesPorCodigo = useMemo(
     () => new Map(animalesOrdenados.map((animal) => [codigoAnimalComparable(animal.codigo_animal), animal])),
     [animalesOrdenados],
+  );
+  const catalogoPorCodigo = useMemo(
+    () => new Map((inicio?.animales ?? []).map((animal) => [codigoAnimalComparable(animal.codigo_animal), animal])),
+    [inicio],
+  );
+  /** Grupo de cada animal del catálogo: permite decir en qué lista sí participa un código. */
+  const grupoPorAnimal = useMemo(
+    () => new Map((inicio?.grupos ?? []).flatMap((grupo) => grupo.animales.map((pk_animal) => [pk_animal, grupo.nombre] as const))),
+    [inicio],
   );
   const horariosPorId = useMemo(() => new Map(inicio?.horarios.map((horario) => [horario.pk_horario_sorteo, horario]) ?? []), [inicio]);
   const minutosActuales = useMemo(() => minutosEnVenezuela(new Date(marcaHoraVenezuela)), [marcaHoraVenezuela]);
@@ -128,9 +149,19 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
   );
   const tiposSorteo = useMemo(() => [...new Set(horariosDisponibles.map((horario) => horario.sorteo))], [horariosDisponibles]);
   const horariosVisibles = filtroSorteo === 'todos' ? horariosDisponibles : horariosDisponibles.filter((horario) => horario.sorteo === filtroSorteo);
-  const total = jugadas.reduce((acumulado, jugada) => acumulado + jugada.monto, 0);
-  const jugadasParaImprimir = jugadas.length ? jugadas : jugadasUltimoTicket;
-  const totalImprimible = jugadas.length ? total : Number(ultimoTicket?.total_jugado ?? total);
+  const cupoDeJugada = useCallback(
+    (jugada: Jugada) => cupos.get(claveCupo(jugada.fk_animal, jugada.fk_horario_sorteo)),
+    [cupos],
+  );
+  /** Una combinación sin cupo queda en 0: no se imprime, no se cuenta y no se vende. */
+  const montoVendible = useCallback(
+    (jugada: Jugada) => (cupoDeJugada(jugada)?.excedido ? 0 : jugada.monto),
+    [cupoDeJugada],
+  );
+  const jugadasVendibles = useMemo(() => jugadas.filter((jugada) => montoVendible(jugada) > 0), [jugadas, montoVendible]);
+  const jugadasSinCupo = jugadas.length - jugadasVendibles.length;
+  const total = jugadasVendibles.reduce((acumulado, jugada) => acumulado + jugada.monto, 0);
+  const jugadasParaImprimir = jugadas.length ? jugadasVendibles : jugadasUltimoTicket;
   const ordenarPorHora = useCallback(
     (lista: Jugada[]) =>
       [...lista].sort((primera, segunda) =>
@@ -140,12 +171,64 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
   );
   const jugadasOrdenadas = useMemo(() => ordenarPorHora(jugadas), [jugadas, ordenarPorHora]);
   const jugadasImprimiblesOrdenadas = useMemo(() => ordenarPorHora(jugadasParaImprimir), [jugadasParaImprimir, ordenarPorHora]);
+  /**
+   * La tirilla se compone una sola vez: el mismo texto alimenta la vista previa,
+   * el registro de consola y el documento que recibe la impresora.
+   */
+  const ticketImpresion = useMemo(
+    () =>
+      componerTicket({
+        agencia: inicio?.agencia.nombre_agencia ?? '',
+        codigoAgencia: inicio?.agencia.codigo_agencia ?? '',
+        numeroTicket: ultimoTicket?.numero_ticket,
+        serial: ultimoTicket?.serial,
+        saltosLinea: inicio?.agencia.salto_linea,
+        jugadas: jugadasImprimiblesOrdenadas,
+        animales: animalesPorId,
+        horarios: horariosPorId,
+        etiquetas: { monto: t('ticket_monto_abrev'), jugadas: t('ticket_jugadas_abrev') },
+      }),
+    [inicio, ultimoTicket, jugadasImprimiblesOrdenadas, animalesPorId, horariosPorId, t],
+  );
 
   useEffect(() => {
     const idsDisponibles = new Set(horariosDisponibles.map((horario) => horario.pk_horario_sorteo));
     establecerHorarios((actuales) => actuales.filter((id) => idsDisponibles.has(id)));
     establecerJugadas((actuales) => actuales.filter((jugada) => idsDisponibles.has(jugada.fk_horario_sorteo)));
   }, [horariosDisponibles]);
+
+  /**
+   * Cada jugada del borrador se valida contra el cupo de la agencia y el del grupero:
+   * así el cupo se descuenta mientras se arma el ticket y no recién al imprimir.
+   */
+  const validarCupoBorrador = useCallback(
+    async (borrador: Jugada[]) => {
+      establecerValidandoCupo(true);
+      try {
+        const verificacion = await llamarApi<VerificacionCupo>(
+          '/agencia/tickets/validar',
+          { method: 'POST', body: JSON.stringify({ jugadas: borrador }) },
+          token,
+        );
+        registrarCupos(verificacion.detalle);
+      } catch (error) {
+        if (error instanceof ErrorApi && error.estado === 401) {
+          establecerSesionVencida(true);
+          return;
+        }
+        // Sin conexión no se bloquea el armado: la validación definitiva ocurre al emitir.
+      } finally {
+        establecerValidandoCupo(false);
+      }
+    },
+    [token, registrarCupos],
+  );
+
+  useEffect(() => {
+    if (!jugadas.length) return undefined;
+    const temporizador = window.setTimeout(() => void validarCupoBorrador(jugadas), 300);
+    return () => window.clearTimeout(temporizador);
+  }, [jugadas, validarCupoBorrador]);
 
   const alternar = (valor: number, valores: number[], establecer: (valores: number[]) => void) =>
     establecer(valores.includes(valor) ? valores.filter((item) => item !== valor) : [...valores, valor]);
@@ -155,16 +238,59 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
     window.requestAnimationFrame(() => referenciaMonto.current?.focus());
   }
 
-  function alternarHorario(pkHorario: number) {
-    alternar(pkHorario, horariosSeleccionados, establecerHorarios);
+  /**
+   * Los sortejos de listas distintas no conviven en un mismo ticket: al marcar un sorteo de
+   * otra lista se reemplaza la selección anterior para que la retícula dibuje la nueva.
+   */
+  function alternarHorario(horario: Horario) {
+    const yaSeleccionado = horariosSeleccionados.includes(horario.pk_horario_sorteo);
+    if (yaSeleccionado) {
+      establecerHorarios(horariosSeleccionados.filter((id) => id !== horario.pk_horario_sorteo));
+    } else if (grupoActivo && horario.fk_grupo_animales !== grupoActivo.pk_grupo_animales) {
+      cambiarLista(horario.fk_grupo_animales);
+      establecerHorarios([horario.pk_horario_sorteo]);
+    } else {
+      establecerHorarios([...horariosSeleccionados, horario.pk_horario_sorteo]);
+      establecerPkGrupoActivo(horario.fk_grupo_animales);
+    }
     window.requestAnimationFrame(() => (animalesSeleccionados.length ? referenciaMonto.current : referenciaAnimalManual.current)?.focus());
+  }
+
+  /**
+   * Cambia la lista de animales dibujada en la taquilla. Si venía de otra lista se limpian
+   * las selecciones (animales y sorteos) para que nunca queden mezcladas.
+   */
+  function cambiarLista(fk_grupo_animales: number) {
+    const grupo = gruposPorId.get(fk_grupo_animales);
+    if (!grupo || grupo.pk_grupo_animales === grupoActivo?.pk_grupo_animales) return;
+    establecerPkGrupoActivo(fk_grupo_animales);
+    establecerAnimales([]);
+    establecerHorarios([]);
+    establecerMensaje(t('lista_cambiada', { lista: grupo.nombre }));
+  }
+
+  /**
+   * Los botones de cada sorteo filtran el listado y, además, dejan su lista de animales
+   * dibujada: es el mismo comportamiento que marcar un sorteo desde «Todos».
+   */
+  function filtrarSorteo(sorteo: string) {
+    establecerFiltroSorteo(sorteo);
+    if (sorteo === 'todos') return;
+    const horario = horariosDisponibles.find((item) => item.sorteo === sorteo);
+    if (horario) cambiarLista(horario.fk_grupo_animales);
   }
 
   function seleccionarAnimalManual() {
     const codigo = codigoAnimalComparable(codigoAnimalManual);
     const animal = animalesPorCodigo.get(codigo);
     if (!animal) {
-      establecerMensaje(t('animal_no_disponible'));
+      const otro = catalogoPorCodigo.get(codigo);
+      const lista = otro ? grupoPorAnimal.get(otro.pk_animal) : undefined;
+      establecerMensaje(
+        otro && lista && lista !== grupoActivo?.nombre
+          ? t('animal_de_otra_lista', { codigo: formatearCodigoAnimal(otro.codigo_animal), lista })
+          : t('animal_no_disponible'),
+      );
       referenciaAnimalManual.current?.focus();
       return;
     }
@@ -179,13 +305,23 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
     window.requestAnimationFrame(() => referenciaMonto.current?.focus());
   }
 
-  function limpiarJugadas() {
+  /** Quita el animal elegido sin tocar los sorteos: así se cargan varios animales al mismo horario. */
+  function limpiarAnimales() {
     establecerAnimales([]);
+    window.requestAnimationFrame(() => referenciaAnimalManual.current?.focus());
+  }
+
+  /** Deja el selector listo para la próxima jugada: sin animales ni sorteos marcados. */
+  function reiniciarSeleccion() {
+    limpiarAnimales();
     establecerHorarios([]);
+  }
+
+  function limpiarJugadas() {
+    reiniciarSeleccion();
     establecerJugadas([]);
     establecerMonto('1');
     establecerMensaje('');
-    window.requestAnimationFrame(() => referenciaAnimalManual.current?.focus());
   }
 
   function agregarJugadas(nuevas: Jugada[]) {
@@ -226,10 +362,9 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
       horariosSeleccionados.map((fk_horario_sorteo) => ({ fk_animal, fk_horario_sorteo, monto: montoNumerico })),
     );
     agregarJugadas(nuevas);
-    establecerAnimales([]);
-    establecerHorarios([]);
+    // Los sorteos se conservan: el operador suele cargar varios animales con el mismo horario.
+    limpiarAnimales();
     establecerMensaje('');
-    window.requestAnimationFrame(() => referenciaAnimalManual.current?.focus());
   }
 
   function manejarTecla(evento: KeyboardEvent<HTMLInputElement>) {
@@ -246,26 +381,16 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
     }
   }
 
-  function construirTextoTicket(): string {
-    const lineas = [...new Map(jugadasImprimiblesOrdenadas.map((jugada) => [jugada.fk_horario_sorteo, jugada])).values()].flatMap((jugada) => {
-      const horario = horariosPorId.get(jugada.fk_horario_sorteo);
-      const items = jugadasImprimiblesOrdenadas.filter((item) => item.fk_horario_sorteo === jugada.fk_horario_sorteo);
-      return [
-        `${horario?.sorteo ?? ''} ${horario?.hora ?? ''}`,
-        items.map((item) => animalesPorId.get(item.fk_animal)?.nombre.slice(0, 4)).join(' - '),
-        `x${items[0].monto.toFixed(2)}`,
-      ];
-    });
-    return [
-      'AG · ANIMALITOS',
-      inicio?.agencia.nombre_agencia ?? '',
-      new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', dateStyle: 'short', timeStyle: 'short' }).format(new Date()),
-      '--------------------------------',
-      ...(ultimoTicket ? [`TN: ${ultimoTicket.numero_ticket} · SN: ${ultimoTicket.serial}`] : []),
-      ...lineas,
-      '--------------------------------',
-      `TOTAL: $${totalImprimible.toFixed(2)}`,
-    ].join('\n');
+  /** Al recibir el foco se marca todo el monto: al escribir un valor nuevo reemplaza el anterior. */
+  function seleccionarMontoAlEnfocar(evento: FocusEvent<HTMLInputElement>) {
+    evento.currentTarget.select();
+    conservarSeleccionMonto.current = true;
+  }
+
+  function conservarSeleccionAlSoltar(evento: MouseEvent<HTMLInputElement>) {
+    if (!conservarSeleccionMonto.current) return;
+    evento.preventDefault();
+    conservarSeleccionMonto.current = false;
   }
 
   /**
@@ -273,24 +398,25 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
    * La verificación devuelve además el cupo vigente de agencia y grupero.
    */
   async function imprimirTicket() {
-    if (!jugadasParaImprimir.length && !ultimoTicket) {
-      establecerMensaje(t('agrega_jugada_antes_imprimir'));
+    const hayBorrador = jugadas.length > 0;
+    if (hayBorrador ? !jugadasVendibles.length : !ultimoTicket) {
+      establecerMensaje(hayBorrador ? t('sin_jugadas_con_cupo') : t('agrega_jugada_antes_imprimir'));
       return;
     }
     establecerVerificando(true);
     try {
-      const cuerpo = jugadas.length ? { jugadas } : { serial: ultimoTicket!.serial };
+      const cuerpo = hayBorrador ? { jugadas: jugadasVendibles } : { serial: ultimoTicket!.serial };
       const verificacion = await llamarApi<VerificacionCupo>('/agencia/tickets/validar', { method: 'POST', body: JSON.stringify(cuerpo) }, token);
       registrarCupos(verificacion.detalle);
       if (!verificacion.puede_emitir) {
         establecerMensaje(verificacion.mensaje ?? t('cupo_agotado'));
         return;
       }
-      const textoTicket = construirTextoTicket();
-      console.info('[AG · Animalitos] Contenido enviado a impresión', { ticket: textoTicket });
-      establecerVistaPreviaTicket(textoTicket);
+      console.info('[AG · Animalitos] Contenido enviado a impresión', { ticket: ticketImpresion });
+      establecerVistaPreviaTicket(ticketImpresion);
       window.print();
       establecerMensaje(t('abriendo_impresora'));
+      reiniciarSeleccion();
     } catch (error) {
       if (error instanceof ErrorApi && error.estado === 401) {
         establecerSesionVencida(true);
@@ -328,15 +454,33 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
       return;
     }
     establecerBuscandoRepetir(true);
+    establecerTicketRepetir(null);
+    establecerJugadasRepetir([]);
     try {
       const ticket = await llamarApi<TicketBuscado>(`/agencia/tickets/buscar?fecha=${fechaRepetir}&numero=${numeroRepetir}`, {}, token);
       establecerTicketRepetir(ticket);
       establecerJugadasRepetir(ticket.jugadas.map((jugada) => jugada.pk_jugada_ticket));
     } catch (error) {
+      establecerTicketRepetir(null);
       gestionarError(error);
     } finally {
       establecerBuscandoRepetir(false);
     }
+  }
+
+  /** Abre el buscador de tickets repetidos sin la información de la consulta anterior. */
+  function abrirRepetir() {
+    establecerTicketRepetir(null);
+    establecerJugadasRepetir([]);
+    establecerNumeroRepetir('');
+    establecerMostrarRepetir(true);
+  }
+
+  /** Cierra el buscador y descarta el ticket consultado para no reutilizar datos viejos. */
+  function cerrarRepetir() {
+    establecerMostrarRepetir(false);
+    establecerTicketRepetir(null);
+    establecerJugadasRepetir([]);
   }
 
   function usarTicketRepetido() {
@@ -347,14 +491,25 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
       establecerMensaje(t('sin_jugadas_para_repetir'));
       return;
     }
+    const destinos = seleccionadas.map((jugada) => horarioDestino(jugada)!);
+    const gruposDestino = new Set(destinos.map((horario) => horario.fk_grupo_animales));
+    const grupoEnTicket = jugadas.length ? horariosPorId.get(jugadas[0].fk_horario_sorteo)?.fk_grupo_animales : undefined;
+    if (gruposDestino.size > 1 || (grupoEnTicket !== undefined && !gruposDestino.has(grupoEnTicket))) {
+      const lista = gruposPorId.get(destinos[0].fk_grupo_animales)?.nombre ?? '';
+      establecerMensaje(t('repetir_lista_distinta', { lista }));
+      return;
+    }
     agregarJugadas(
-      seleccionadas.map((jugada) => ({
+      seleccionadas.map((jugada, indice) => ({
         fk_animal: jugada.fk_animal,
-        fk_horario_sorteo: horarioDestino(jugada)!.pk_horario_sorteo,
+        fk_horario_sorteo: destinos[indice].pk_horario_sorteo,
         monto: Number(jugada.monto),
       })),
     );
-    establecerMostrarRepetir(false);
+    // El panel acompaña al ticket repetido: se dibuja la lista de los sorteos recién agregados.
+    establecerPkGrupoActivo(destinos[0].fk_grupo_animales);
+    cerrarRepetir();
+    establecerNumeroRepetir('');
     establecerMensaje(t('jugadas_agregadas', { cantidad: seleccionadas.length }));
     window.requestAnimationFrame(() => referenciaAnimalManual.current?.focus());
   }
@@ -396,32 +551,25 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
 
   async function emitir(evento: FormEvent) {
     evento.preventDefault();
-    if (!jugadas.length) {
-      establecerMensaje(t('agrega_jugada_antes_emitir'));
+    if (!jugadasVendibles.length) {
+      establecerMensaje(jugadas.length ? t('sin_jugadas_con_cupo') : t('agrega_jugada_antes_emitir'));
       return;
     }
     establecerEmitiendo(true);
     establecerMensaje('');
     try {
-      const ticket = await llamarApi<Ticket>('/agencia/tickets', { method: 'POST', body: JSON.stringify({ jugadas }) }, token);
+      const ticket = await llamarApi<Ticket>('/agencia/tickets', { method: 'POST', body: JSON.stringify({ jugadas: jugadasVendibles }) }, token);
       establecerUltimoTicket(ticket);
-      establecerJugadasUltimoTicket(jugadas);
+      establecerJugadasUltimoTicket(jugadasVendibles);
       registrarCupos(ticket.cupos);
       establecerJugadas([]);
+      reiniciarSeleccion();
       establecerMensaje(t('venta_exitosa'));
     } catch (error) {
       gestionarError(error);
     } finally {
       establecerEmitiendo(false);
     }
-  }
-
-  function cupoDeJugada(jugada: Jugada): CupoCombinacion | undefined {
-    return cupos.get(claveCupo(jugada.fk_animal, jugada.fk_horario_sorteo));
-  }
-
-  function cupoExcedido(): CupoCombinacion | undefined {
-    return jugadas.map(cupoDeJugada).find((item) => item?.excedido);
   }
 
   if (cargando) return <p className="estado-pagina">{t('cargando')}</p>;
@@ -437,7 +585,6 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
     );
   if (!inicio) return <p className="estado-pagina mensaje-error">{mensaje || t('error_consulta')}</p>;
 
-  const excedida = cupoExcedido();
   return (
     <section className="ventas">
       <div className="encabezado-ventas">
@@ -501,6 +648,8 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
                   step="0.01"
                   inputMode="decimal"
                   value={monto}
+                  onFocus={seleccionarMontoAlEnfocar}
+                  onMouseUp={conservarSeleccionAlSoltar}
                   onKeyDown={manejarTecla}
                   onChange={(evento) => {
                     const valor = evento.target.value;
@@ -524,7 +673,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
             <span>{t('seleccionados', { cantidad: horariosSeleccionados.length })}</span>
           </div>
           <div className="filtros-sorteos" role="group" aria-label={t('filtrar_sorteos')}>
-            <button type="button" className={filtroSorteo === 'todos' ? 'activo' : ''} aria-pressed={filtroSorteo === 'todos'} onClick={() => establecerFiltroSorteo('todos')}>
+            <button type="button" className={filtroSorteo === 'todos' ? 'activo' : ''} aria-pressed={filtroSorteo === 'todos'} onClick={() => filtrarSorteo('todos')}>
               {t('todos')}
             </button>
             {tiposSorteo.map((sorteo) => (
@@ -533,7 +682,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
                 key={sorteo}
                 className={filtroSorteo === sorteo ? 'activo' : ''}
                 aria-pressed={filtroSorteo === sorteo}
-                onClick={() => establecerFiltroSorteo(sorteo)}
+                onClick={() => filtrarSorteo(sorteo)}
               >
                 {sorteo}
               </button>
@@ -546,7 +695,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
                   <input
                     type="checkbox"
                     checked={horariosSeleccionados.includes(horario.pk_horario_sorteo)}
-                    onChange={() => alternarHorario(horario.pk_horario_sorteo)}
+                    onChange={() => alternarHorario(horario)}
                   />
                   <span>
                     <b>{horario.sorteo}</b>
@@ -567,7 +716,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
               jugadasOrdenadas.map((jugada) => {
                 const animal = animalesPorId.get(jugada.fk_animal);
                 const horario = horariosPorId.get(jugada.fk_horario_sorteo);
-                const cupo = cupoDeJugada(jugada);
+                const monto = montoVendible(jugada);
                 return (
                   <div className="fila-jugada" key={claveCupo(jugada.fk_animal, jugada.fk_horario_sorteo)}>
                     <span className="detalle-jugada">
@@ -577,16 +726,11 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
                       <span>{animal?.nombre}</span>
                       <small>
                         {horario?.sorteo} {horario?.hora}
-                        {cupo && (
-                          <>
-                            {' · '}
-                            {t('cupo_agencia')}: {cupo.disponible_agencia.toFixed(2)}
-                            {cupo.disponible_grupero !== null && ` · ${t('cupo_grupero')}: ${cupo.disponible_grupero.toFixed(2)}`}
-                          </>
-                        )}
                       </small>
                     </span>
-                    <strong>${jugada.monto.toFixed(2)}</strong>
+                    <strong className={monto ? '' : 'monto-sin-cupo'} title={monto ? undefined : t('sin_cupo')}>
+                      ${monto.toFixed(2)}
+                    </strong>
                     <button
                       type="button"
                       aria-label={t('limpiar')}
@@ -607,8 +751,9 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
             <span>{t('total_ticket')}</span>
             <strong>${total.toFixed(2)}</strong>
           </div>
-          {excedida && <p className="mensaje-error">{t('cupo_agotado')}</p>}
-          <button className="boton-primario ancho-completo" disabled={emitiendo}>
+          {jugadasSinCupo > 0 && <p className="nota-cupo">{t('jugadas_sin_cupo', { cantidad: jugadasSinCupo })}</p>}
+          {validandoCupo && !jugadasSinCupo && <p className="nota-cupo">{t('validando_cupo')}</p>}
+          <button className="boton-primario ancho-completo" disabled={emitiendo || !jugadasVendibles.length}>
             {emitiendo ? t('consultando') : t('emitir')}
           </button>
         </aside>
@@ -617,7 +762,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
         <button type="button" onClick={() => (jugadas.length ? establecerConfirmarLimpieza(true) : establecerMensaje(t('sin_jugadas_limpiar')))}>
           {t('limpiar_jugadas')}
         </button>
-        <button type="button" onClick={() => establecerMostrarRepetir(true)}>
+        <button type="button" onClick={abrirRepetir}>
           {t('repetir_ticket')}
         </button>
         <button type="button" onClick={() => establecerMostrarAnular(true)}>
@@ -627,32 +772,12 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
           {t('pagar_ticket')}
         </button>
       </section>
-      <section className="ticket-pos" aria-hidden="true">
-        <strong>AG · ANIMALITOS</strong>
-        <span>{inicio.agencia.nombre_agencia}</span>
-        <span>{new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', dateStyle: 'short', timeStyle: 'short' }).format(new Date())}</span>
-        <hr />
-        {ultimoTicket && (
-          <span>
-            TN: {ultimoTicket.numero_ticket} · SN: {ultimoTicket.serial}
-          </span>
-        )}
-        {[...new Map(jugadasImprimiblesOrdenadas.map((jugada) => [jugada.fk_horario_sorteo, jugada])).values()].map((jugada) => {
-          const horario = horariosPorId.get(jugada.fk_horario_sorteo);
-          const items = jugadasImprimiblesOrdenadas.filter((item) => item.fk_horario_sorteo === jugada.fk_horario_sorteo);
-          return (
-            <div key={jugada.fk_horario_sorteo}>
-              <b>
-                {horario?.sorteo} {horario?.hora}
-              </b>
-              <span>{items.map((item) => animalesPorId.get(item.fk_animal)?.nombre.slice(0, 4)).join(' - ')}</span>
-              <span>x{items[0].monto.toFixed(2)}</span>
-            </div>
-          );
-        })}
-        <hr />
-        <strong>Total: ${totalImprimible.toFixed(2)}</strong>
-      </section>
+      {createPortal(
+        <section className="ticket-pos" aria-hidden="true">
+          <pre>{ticketImpresion}</pre>
+        </section>,
+        document.body,
+      )}
       {mensaje && (
         <div className="notificacion emergente" role="status">
           {mensaje}
@@ -718,7 +843,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
           <section className="ventana-consulta tarjeta modal-repetir" role="dialog" aria-modal="true" aria-label={t('repetir_ticket')}>
             <header className="encabezado-consulta">
               <h2>{t('repetir_ticket')}</h2>
-              <button type="button" className="boton-cerrar" aria-label={t('cerrar')} onClick={() => establecerMostrarRepetir(false)}>
+              <button type="button" className="boton-cerrar" aria-label={t('cerrar')} onClick={cerrarRepetir}>
                 ×
               </button>
             </header>
@@ -739,7 +864,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
                   required
                 />
               </label>
-              <button className="boton-secundario" disabled={buscandoRepetir}>
+              <button className="boton-buscar" disabled={buscandoRepetir}>
                 {buscandoRepetir ? t('buscando') : t('buscar')}
               </button>
             </form>
@@ -785,7 +910,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
                     })}
                 </div>
                 <div className="acciones-modal">
-                  <button type="button" className="boton-secundario" onClick={() => establecerMostrarRepetir(false)}>
+                  <button type="button" className="boton-secundario" onClick={cerrarRepetir}>
                     {t('cancelar')}
                   </button>
                   <button type="button" className="boton-primario" disabled={!jugadasRepetir.length} onClick={usarTicketRepetido}>
@@ -828,7 +953,7 @@ export function AgenciaVentasRuta({ token, alVencerSesion }: Propiedades) {
                     required
                   />
                 </label>
-                <button className="boton-secundario" disabled={consultandoPago}>
+                <button className="boton-buscar" disabled={consultandoPago}>
                   {consultandoPago ? t('consultando') : t('buscar')}
                 </button>
               </form>

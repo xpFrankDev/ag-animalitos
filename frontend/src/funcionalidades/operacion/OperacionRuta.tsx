@@ -146,6 +146,7 @@ export function OperacionRuta({ token, alVencerSesion }: Propiedades) {
       cupo_animal: Number(formularioAgencia.cupo_animal),
       jugada_minima: Number(formularioAgencia.jugada_minima),
       minutos_cierre: Number(formularioAgencia.minutos_cierre),
+      salto_linea: Number(formularioAgencia.salto_linea || 0),
       activa: formularioAgencia.activa,
       ...(permisos?.puede_definir_comision ? { comision_porcentaje: Number(formularioAgencia.comision_porcentaje) } : {}),
       ...(permisos?.puede_gestionar_gruperos ? { fk_grupero: formularioAgencia.fk_grupero || undefined } : {}),

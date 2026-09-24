@@ -9,6 +9,7 @@ export const formularioAgenciaVacio = (): FormularioAgencia => ({
   cupo_animal: '100',
   jugada_minima: '1',
   minutos_cierre: '5',
+  salto_linea: '0',
   fk_grupero: '',
   activa: true,
 });
@@ -32,6 +33,7 @@ export const formularioAgenciaDeAgencia = (agencia: Agencia): FormularioAgencia 
   cupo_animal: String(agencia.cupo_animal ?? 100),
   jugada_minima: String(agencia.jugada_minima ?? 1),
   minutos_cierre: String(agencia.minutos_cierre ?? 5),
+  salto_linea: String(agencia.salto_linea ?? 0),
   fk_grupero: agencia.grupero ?? '',
   activa: agencia.activa,
 });

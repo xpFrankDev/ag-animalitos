@@ -8,6 +8,7 @@ import {
   Animal,
   EstadoTicket,
   Grupero,
+  GrupoAnimales,
   HorarioSorteo,
   OrigenResultado,
   Resultado,
@@ -35,6 +36,7 @@ export class OperacionService {
   constructor(
     @InjectRepository(Agencia) private readonly agencias: Repository<Agencia>,
     @InjectRepository(Animal) private readonly animales: Repository<Animal>,
+    @InjectRepository(GrupoAnimales) private readonly grupos: Repository<GrupoAnimales>,
     @InjectRepository(Grupero) private readonly gruperos: Repository<Grupero>,
     @InjectRepository(HorarioSorteo) private readonly horarios: Repository<HorarioSorteo>,
     @InjectRepository(Resultado) private readonly resultados: Repository<Resultado>,
@@ -122,6 +124,7 @@ export class OperacionService {
         cupo_animal: Number(agencia.cupo_animal),
         jugada_minima: Number(agencia.jugada_minima),
         minutos_cierre: agencia.minutos_cierre,
+        salto_linea: agencia.salto_linea,
       })),
       gruperos: (alcance.es_banquero ? gruperosDelAlcance : []).map((grupero) => ({
         pk_grupero: grupero.pk_grupero,
@@ -252,16 +255,23 @@ export class OperacionService {
   async catalogoResultados(sesion: Sesion) {
     const alcance = await this.alcance(sesion);
     if (!alcance.es_banquero) throw new ForbiddenException('Solo el Banquero puede registrar resultados.');
-    const [animales, horarios] = await Promise.all([
+    const [animales, grupos, horarios] = await Promise.all([
       this.animales.find({ where: { activo: true }, order: { codigo_animal: 'ASC' } }),
-      this.horarios.find({ where: { activo: true }, relations: { sorteo: true }, order: { hora: 'ASC' } }),
+      this.grupos.find({ where: { activo: true }, relations: { animales: true }, order: { pk_grupo_animales: 'ASC' } }),
+      this.horarios.find({ where: { activo: true }, relations: { sorteo: { grupo_animales: true } }, order: { hora: 'ASC' } }),
     ]);
     return {
       animales,
+      grupos: grupos.map((grupo) => ({
+        pk_grupo_animales: grupo.pk_grupo_animales,
+        nombre: grupo.nombre,
+        animales: grupo.animales.map((animal) => animal.pk_animal),
+      })),
       horarios: horarios.map((horario) => ({
         pk_horario_sorteo: horario.pk_horario_sorteo,
         hora: horario.hora.slice(0, 5),
         sorteo: horario.sorteo.nombre,
+        fk_grupo_animales: horario.sorteo.grupo_animales.pk_grupo_animales,
         multiplicador_premio: Number(horario.sorteo.multiplicador_premio),
       })),
     };
@@ -277,10 +287,17 @@ export class OperacionService {
     if (!alcance.es_banquero) throw new ForbiddenException('Solo el Banquero puede registrar resultados.');
     const fecha_juego = resolverFecha(datos.fecha_juego);
     const [horario, animal] = await Promise.all([
-      this.horarios.findOneBy({ pk_horario_sorteo: datos.fk_horario_sorteo, activo: true }),
+      this.horarios.findOne({
+        where: { pk_horario_sorteo: datos.fk_horario_sorteo, activo: true },
+        relations: { sorteo: { grupo_animales: { animales: true } } },
+      }),
       this.animales.findOneBy({ pk_animal: datos.fk_animal, activo: true }),
     ]);
     if (!horario || !animal) throw new BadRequestException('El sorteo o animal seleccionado no está disponible.');
+    const participantes = horario.sorteo.grupo_animales;
+    if (participantes && !participantes.animales.some((item) => item.pk_animal === animal.pk_animal)) {
+      throw new BadRequestException(`El animal no participa en ${horario.sorteo.nombre}.`);
+    }
     const existente = await this.resultados.findOneBy({ fecha_juego, fk_horario_sorteo: horario.pk_horario_sorteo });
     if (existente) {
       await this.resultados.update(existente.pk_resultado, {
@@ -367,6 +384,7 @@ export class OperacionService {
           cupo_animal: (datos.cupo_animal ?? 100).toFixed(2),
           jugada_minima: (datos.jugada_minima ?? 1).toFixed(2),
           minutos_cierre: datos.minutos_cierre ?? 5,
+          salto_linea: datos.salto_linea ?? 0,
           serial_pc: null,
           proximo_numero_ticket: 1,
           fecha_numero_ticket: null,
@@ -403,6 +421,7 @@ export class OperacionService {
       ...(datos.cupo_animal !== undefined ? { cupo_animal: datos.cupo_animal.toFixed(2) } : {}),
       ...(datos.jugada_minima !== undefined ? { jugada_minima: datos.jugada_minima.toFixed(2) } : {}),
       ...(datos.minutos_cierre !== undefined ? { minutos_cierre: datos.minutos_cierre } : {}),
+      ...(datos.salto_linea !== undefined ? { salto_linea: datos.salto_linea } : {}),
       ...(datos.activa !== undefined ? { activa: datos.activa } : {}),
       fk_grupero,
       fk_usuario_modificado: sesion.sub,
